@@ -15,7 +15,7 @@ const state = {
   down: null, downKey: '',  // 열마다 아래로 이어지는 모양 안쪽 길이 (getDownRuns)
   opaque: false,
   fonts: [],
-  tiles: [],               // 포토 모자이크 타일 이미지 {bmp, sx, sy, side, avg, name, thumb}
+  tiles: [],               // 포토 모자이크 타일 이미지 {bmp, sx, sy, side, samples, colorAvg, name, thumb}
 };
 
 // ---------- 글꼴 ----------
@@ -1049,13 +1049,20 @@ function paintMosaic(ctx, outW, outH, o, colorAt) {
       if (!inside) { above[col] = -1; left = -1; continue; }
 
       const want = colorAt(x0, y0, T, T);
-      // 평균색이 가장 가까운 타일. 바로 왼쪽·위와 같은 타일이면 조금 불리하게 해서 같은 사진이 뭉치지 않게 한다.
-      let best = 0, bd = Infinity;
+      // 칸의 색을 가장 많이 가진 사진을 고른다: 사진 속 픽셀이 칸의 색에 얼마나 가까운지를 모두 더한 점수.
+      // (평균색으로 고르면 반은 빨강·반은 초록인 사진이 갈색 칸에 뽑히는 식으로 어긋난다)
+      // 바로 왼쪽·위와 같은 사진이면 점수를 조금 깎아 같은 사진이 뭉치지 않게 한다.
+      let best = 0, bs = -1;
       for (let ti = 0; ti < tiles.length; ti++) {
-        const a = tiles[ti].avg;
-        let d = (a[0] - want[0]) ** 2 + (a[1] - want[1]) ** 2 + (a[2] - want[2]) ** 2;
-        if (tiles.length > 2 && (ti === left || ti === above[col])) d += 2500;
-        if (d < bd) { bd = d; best = ti; }
+        const sm = tiles[ti].samples;
+        let sc = 0;
+        for (let q = 0; q < sm.length; q += 3) {
+          const d2 = (sm[q] - want[0]) ** 2 + (sm[q + 1] - want[1]) ** 2 + (sm[q + 2] - want[2]) ** 2;
+          sc += Math.exp(-d2 / MATCH_SPREAD);
+        }
+        sc /= sm.length / 3 || 1;
+        if (tiles.length > 2 && (ti === left || ti === above[col])) sc *= 0.85;
+        if (sc > bs) { bs = sc; best = ti; }
       }
       left = above[col] = best;
 
@@ -1063,13 +1070,15 @@ function paintMosaic(ctx, outW, outH, o, colorAt) {
       const w = Math.round((x0 + T) * r) - X0, h = Math.round((y0 + T) * r) - Y0;
       if (w < 1 || h < 1) continue;
       const src = scaledData(best, w, h);
-      // 색 보정: 타일의 평균색을 칸의 색 쪽으로 옮긴다 (무늬는 그대로, 강도만큼)
-      const a = tiles[best].avg, k = o.strength;
+      // 색 보정: 사진의 색이 있는 부분의 평균을 칸의 색 쪽으로 옮긴다 (무늬는 그대로, 강도만큼).
+      // 흰색에 가까운 부분(밝고 채도 낮음)은 옮기지 않아 흰 부분에 색이 끼지 않게 한다.
+      const a = tiles[best].colorAvg, k = o.strength;
       const dr = (want[0] - a[0]) * k, dg = (want[1] - a[1]) * k, db = (want[2] - a[2]) * k;
       const out = ctx.createImageData(w, h);
       const s = src.data, d = out.data;
       for (let p = 0; p < s.length; p += 4) {
-        d[p] = s[p] + dr; d[p + 1] = s[p + 1] + dg; d[p + 2] = s[p + 2] + db; d[p + 3] = s[p + 3];
+        const wt = 1 - whiteness(s[p], s[p + 1], s[p + 2]);
+        d[p] = s[p] + dr * wt; d[p + 1] = s[p + 1] + dg * wt; d[p + 2] = s[p + 2] + db * wt; d[p + 3] = s[p + 3];
       }
       ctx.putImageData(out, X0, Y0);
       placed++;
@@ -1078,7 +1087,20 @@ function paintMosaic(ctx, outW, outH, o, colorAt) {
   return { hasSpace: placed > 0, placed };
 }
 
-// 타일 이미지 불러오기: 가운데를 정사각형으로 잘라 쓰고, 평균색을 미리 구해 둔다
+// 칸의 색과 사진 픽셀이 얼마나 가까워야 '같은 색'으로 치는지 (클수록 너그럽게)
+const MATCH_SPREAD = 2 * 45 * 45;
+
+// 흰색다움 0~1: 밝을수록, 채도가 낮을수록 1에 가깝다. 밝아도 채도가 높은 색(노랑 등)은 0.
+function whiteness(r, g, b) {
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const sat = max ? (max - min) / max : 0;
+  const bright = Math.min(1, Math.max(0, (lum - 170) / 75));
+  const pale = Math.min(1, Math.max(0, 1 - (sat - 0.08) / 0.25));
+  return bright * pale;
+}
+
+// 타일 이미지 불러오기: 가운데를 정사각형으로 잘라 쓰고, 고를 때·보정할 때 쓸 색 정보를 미리 구해 둔다
 async function addTiles(files) {
   const list = [...files].filter(f => f.type.startsWith('image/'));
   if (!list.length) { setStatus('이미지 파일이 아닙니다. 타일로 쓸 그림 파일을 넣어 주세요.', true); return; }
@@ -1093,10 +1115,22 @@ async function addTiles(files) {
     const cx = c.getContext('2d', { willReadFrequently: true });
     cx.drawImage(bmp, sx, sy, side, side, 0, 0, 16, 16);
     const px = cx.getImageData(0, 0, 16, 16).data;
-    let r = 0, g = 0, b = 0, n = 0;
-    for (let p = 0; p < px.length; p += 4) { if (px[p + 3] < 128) continue; r += px[p]; g += px[p + 1]; b += px[p + 2]; n++; }
+    // samples: 고를 때 쓰는 픽셀 색들 / colorAvg: 흰 부분을 빼고 낸 평균색 (보정 기준)
+    // (고를 때는 칸마다 모든 사진을 훑으므로 8×8로 줄인 픽셀만 쓴다: 색 비율을 보기엔 충분하고 4배 빠르다)
+    const samples = [];
+    let r = 0, g = 0, b = 0, wsum = 0, ar = 0, ag = 0, ab = 0, n = 0;
+    for (let p = 0; p < px.length; p += 4) {
+      if (px[p + 3] < 128) continue;
+      const q = p / 4;
+      if ((q & 1) === 0 && ((q >> 4) & 1) === 0) samples.push(px[p], px[p + 1], px[p + 2]);
+      ar += px[p]; ag += px[p + 1]; ab += px[p + 2]; n++;
+      const wt = 1 - whiteness(px[p], px[p + 1], px[p + 2]);
+      r += px[p] * wt; g += px[p + 1] * wt; b += px[p + 2] * wt; wsum += wt;
+    }
     if (!n) n = 1;
-    const t = { bmp, sx, sy, side, avg: [r / n, g / n, b / n], name: f.name };
+    // 거의 다 흰 사진이면 전체 평균을 쓴다
+    const colorAvg = wsum > 0.5 ? [r / wsum, g / wsum, b / wsum] : [ar / n, ag / n, ab / n];
+    const t = { bmp, sx, sy, side, samples: new Float32Array(samples), colorAvg, name: f.name };
     const thumb = document.createElement('canvas');
     thumb.width = thumb.height = 96;
     thumb.getContext('2d').drawImage(bmp, sx, sy, side, side, 0, 0, 96, 96);
