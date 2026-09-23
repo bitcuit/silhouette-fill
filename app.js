@@ -670,6 +670,7 @@ function layout(src, base, o, onLine) {
   const down = getDownRuns(o.thr);
   const { asc, desc } = o.metrics;
   const n = src.length;
+  const tr = (o.tracking || 0) * base;   // 자간 (기본 글자 크기에 대한 비율)
   const inside = new Uint8Array(mw);
   let idx = 0, y = 0, totalArea = 0, emptyArea = 0, placedCount = 0;
 
@@ -724,7 +725,7 @@ function layout(src, base, o, onLine) {
       if (i >= n && !o.repeat) { empty += runEnd - a; continue; }
 
       // 구간 안에서 글자를 하나씩 놓는다. 윤곽에 걸리는 글자는 걸린 곳 너머로 옮겨 다시 시도한다.
-      let cx = a, fresh = true, tries = 0;
+      let cx = a, fresh = true, tries = 0, seg = items.length;
       while (cx < runEnd && tries++ < 5000) {
         if (i >= n) { if (o.repeat) i = 0; else break; }
         const it = src[i];
@@ -735,15 +736,39 @@ function layout(src, base, o, onLine) {
         if (hit >= 0) {
           cx = Math.max(cx + 1, hit + 1);                    // 걸린 열 다음부터 다시
           fresh = true;
+          seg = items.length;
           continue;
         }
         items.push(it); widths.push(w); xs.push(cx);
         maxH = Math.max(maxH, it.scale * base);
         if (it.ch !== ' ') placed++;
-        cx += w; i++; fresh = false;
+        cx += w + tr; i++; fresh = false;
       }
+      // 줄 끝에 남은 자리(한 글자 폭보다 작음)를 글자 사이에 고르게 나눠, 줄이 윤곽 양 끝에 닿게 한다.
+      // 글의 마지막 줄은 그대로 두고, 나눴을 때 윤곽에 걸리는 글자가 생기면 하지 않는다.
+      if (!(i >= n && !o.repeat)) spread(items, widths, xs, seg, runEnd, baseline);
     }
     return { i, maxH, area, empty, placed, line: { items, widths, xs } };
+  };
+
+  const spread = (items, widths, xs, seg, runEnd, baseline) => {
+    let last = items.length - 1;
+    while (last > seg && items[last].ch === ' ') last--;
+    const count = last - seg;
+    if (count < 1) return;
+    const extra = runEnd - (xs[last] + widths[last]);
+    if (extra <= 0.5) return;
+    for (const k of [1, 0.5]) {
+      const gap = extra * k / count;
+      let ok = true;
+      for (let j = seg + 1; j <= last && ok; j++) {
+        if (items[j].ch !== ' ' && blockedAt(items[j], xs[j] + gap * (j - seg), baseline, widths[j]) >= 0) ok = false;
+      }
+      if (ok) {
+        for (let j = seg + 1; j < items.length; j++) xs[j] += gap * Math.min(j - seg, count);
+        return;
+      }
+    }
   };
 
   for (;;) {
@@ -793,6 +818,18 @@ function autoFitSize(src, o) {
   return lo;
 }
 
+// 크기를 조금만 키워도 줄이 통째로 하나 빠지기 때문에, 크기만으로는 글이 끝난 뒤 한두 줄이 빈다.
+// 그 남는 자리를 자간을 살짝 넓혀 채운다: 글이 여전히 다 들어가는 가장 넓은 자간.
+function autoFitTracking(src, base, o) {
+  let lo = 0, hi = 0.6;
+  if (layout(src, base, { ...o, tracking: hi }).remaining === 0) return hi;
+  for (let i = 0; i < 14; i++) {
+    const mid = (lo + hi) / 2;
+    if (layout(src, base, { ...o, tracking: mid }).remaining === 0) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
 // ---------- 그리기 ----------
 function readOptions() {
   const auto = $('autoFit').checked;
@@ -832,7 +869,9 @@ async function computeLayout(o) {
     }));
   }
   o.metrics = glyphMetrics(o.family, src);
+  o.tracking = 0;
   const base = src.length && o.auto ? autoFitSize(src, o) : o.fs;
+  if (src.length && o.auto) o.tracking = autoFitTracking(src, base, o);
   return { src, base };
 }
 
