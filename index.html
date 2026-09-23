@@ -40,7 +40,10 @@
 
       <section id="tileSection" hidden>
         <h2>타일 이미지</h2>
-        <button class="btn line" id="pickTiles">이미지 추가</button>
+        <div class="dropzone">
+          <p>타일로 쓸 이미지를 끌어다 놓거나</p>
+          <button class="btn line small" id="pickTiles">이미지 추가</button>
+        </div>
         <div class="tiles" id="tileList"></div>
         <div class="head sub">
           <button class="tool text" id="clearTiles" hidden>모두 지우기</button>
@@ -105,6 +108,7 @@
           <div class="head"><span class="label">경계값</span><span class="num-wrap"><input type="number" class="num" data-for="thr" aria-label="경계값"></span></div>
           <input type="range" id="thr" min="1" max="255" step="1" value="128">
         </div>
+        <label class="check" id="whiteInnerWrap" hidden><input type="checkbox" id="whiteInner">안쪽 흰색도 빼기</label>
       </section>
 
       <section class="image-only" hidden>

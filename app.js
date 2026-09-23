@@ -322,22 +322,17 @@ function rebuildMask(resetThreshold) {
   const { rgba, mw, mh } = state;
   if (!rgba) return;
   const mode = maskMode();
+  // 흰색 제외의 기본 경계값 40: JPG 압축 등으로 생긴 거의 흰 색까지 흰색으로 본다
+  if (resetThreshold) $('thr').value = mode === 'white' ? 40 : 128;
   const m = new Uint8Array(mw * mh);
-  for (let i = 0, p = 0; i < m.length; i++, p += 4) {
-    const a = rgba[p + 3];
-    if (mode === 'full') { m[i] = 255; continue; }
-    if (mode === 'alpha') { m[i] = a; continue; }
-    // 흰색 제외: 흰색에서 얼마나 먼 색인지 (투명한 곳도 뺀다)
-    if (a < 128) { m[i] = 0; continue; }
-    const d = Math.sqrt((255 - rgba[p]) ** 2 + (255 - rgba[p + 1]) ** 2 + (255 - rgba[p + 2]) ** 2);
-    m[i] = Math.min(255, Math.round(d));
+  if (mode === 'white') buildWhiteMask(m, +$('thr').value, $('whiteInner').checked);
+  else {
+    for (let i = 0, p = 0; i < m.length; i++, p += 4) m[i] = mode === 'full' ? 255 : rgba[p + 3];
   }
   state.mask = m;
   state.downKey = '';
   state.paletteKey = '';
   if (resetThreshold) {
-    // 흰색 제외의 기본 경계값 40: JPG 압축 등으로 생긴 거의 흰 색까지 흰색으로 본다
-    $('thr').value = mode === 'white' ? 40 : 128;
     // '두 색'의 나누는 밝기: 모양 안쪽 밝기를 두 무리로 가장 잘 가르는 값
     const thr = +$('thr').value, lum = [];
     for (let i = 0, p = 0; i < m.length; i++, p += 4) {
@@ -351,6 +346,38 @@ function rebuildMask(resetThreshold) {
       state.lumHi = lum[Math.floor(lum.length * 0.98)];
     }
   }
+}
+
+// 흰색 제외: 흰색(흰색에서 경계값보다 가까운 색)과 투명한 곳을 뺀다.
+// 기본은 그림 가장자리와 이어진 흰색(바탕)만 빼고, 다른 색에 둘러싸인 안쪽 흰색(눈·흰 옷·하이라이트)은 모양에 넣는다.
+// inner를 켜면 안쪽 흰색도 뺀다. 결과는 0(뺌) / 255(모양)이라 경계값을 바꾸면 다시 만든다.
+function buildWhiteMask(m, thr, inner) {
+  const { rgba, mw, mh } = state;
+  const white = new Uint8Array(mw * mh);
+  for (let i = 0, p = 0; i < white.length; i++, p += 4) {
+    if (rgba[p + 3] < 128) { white[i] = 1; continue; }
+    const d = Math.sqrt((255 - rgba[p]) ** 2 + (255 - rgba[p + 1]) ** 2 + (255 - rgba[p + 2]) ** 2);
+    white[i] = d < thr ? 1 : 0;
+  }
+  if (inner) {
+    for (let i = 0; i < m.length; i++) m[i] = white[i] ? 0 : 255;
+    return;
+  }
+  // 가장자리의 흰 픽셀에서 시작해 이어진 흰 픽셀을 따라가며 '바탕'으로 표시한다
+  const bg = new Uint8Array(mw * mh);
+  const stack = new Int32Array(mw * mh);
+  let top = 0;
+  const seed = i => { if (white[i] && !bg[i]) { bg[i] = 1; stack[top++] = i; } };
+  for (let x = 0; x < mw; x++) { seed(x); seed((mh - 1) * mw + x); }
+  for (let y = 0; y < mh; y++) { seed(y * mw); seed(y * mw + mw - 1); }
+  while (top) {
+    const i = stack[--top], x = i % mw;
+    if (x > 0) seed(i - 1);
+    if (x < mw - 1) seed(i + 1);
+    if (i >= mw) seed(i - mw);
+    if (i < (mh - 1) * mw) seed(i + mw);
+  }
+  for (let i = 0; i < m.length; i++) m[i] = bg[i] ? 0 : 255;
 }
 
 // 명암 분포를 두 무리로 가장 잘 가르는 값 (Otsu)
@@ -1305,6 +1332,7 @@ function syncControls() {
   $('quantWrap').hidden = colorMode === 'duo';
   $('monoWrap').hidden = colorMode !== 'mono';
   $('thrWrap').hidden = maskMode() === 'full';
+  $('whiteInnerWrap').hidden = maskMode() !== 'white';
   const q = +$('quant').value;
   $('quantOut').value = q > 16 ? '원본' : colorMode === 'mono' ? `${q}단계` : `${q}색`;
   const jpg = $('format').value === 'jpg';
@@ -1385,7 +1413,7 @@ $('tileFile').onchange = e => { addTiles(e.target.files); e.target.value = ''; }
 $('clearTiles').onclick = () => { state.tiles = []; renderTileList(); schedule(); };
 const tileSection = $('tileSection');
 tileSection.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); tileSection.classList.add('dragging'); });
-tileSection.addEventListener('dragleave', () => tileSection.classList.remove('dragging'));
+tileSection.addEventListener('dragleave', e => { if (!tileSection.contains(e.relatedTarget)) tileSection.classList.remove('dragging'); });
 tileSection.addEventListener('drop', e => {
   e.preventDefault();
   e.stopPropagation();
@@ -1417,6 +1445,9 @@ document.querySelectorAll('.panel input, .panel select').forEach(el => {
   el.addEventListener('input', schedule);
 });
 document.querySelectorAll('[name=maskMode]').forEach(el => el.addEventListener('change', () => rebuildMask(true)));
+// 흰색 제외는 경계값으로 흰색을 먼저 정해야 바탕을 따라갈 수 있으므로, 경계값·안쪽 흰색 설정이 바뀌면 다시 만든다
+$('thr').addEventListener('input', () => { if (maskMode() === 'white') rebuildMask(false); });
+$('whiteInner').addEventListener('change', () => { rebuildMask(false); schedule(); });
 
 // 서식 도구: 누를 때 편집기 선택이 풀리지 않게
 document.querySelectorAll('.tool[data-cmd], #clearFmt, #clearAllFmt').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
