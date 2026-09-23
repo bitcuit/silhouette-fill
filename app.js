@@ -301,7 +301,7 @@ function applyZoom() {
   c.style.width = `${state.img.width * z}px`;
   c.style.height = `${state.img.height * z}px`;
   $('zoom').value = Math.round(z * 100);
-  $('zoomOut').value = `${Math.round(z * 100)}%`;
+  numFor('zoom').value = Math.round(z * 100);
   $('zoomFit').setAttribute('aria-pressed', String(state.zoom === null));
   // 확대해서 미리보기 해상도가 모자라면 다시 그린다
   const [pw] = previewSize(+$('outScale').value);
@@ -349,7 +349,15 @@ function rebuildMask(resetThreshold) {
   state.mask = m;
   state.downKey = '';
   state.paletteKey = '';
-  if (resetThreshold) $('thr').value = mode === 'bg' ? Math.min(200, Math.max(24, otsu(m))) : 128;
+  if (resetThreshold) {
+    $('thr').value = mode === 'bg' ? Math.min(200, Math.max(24, otsu(m))) : 128;
+    // '두 색'의 나누는 밝기: 모양 안쪽 밝기를 두 무리로 가장 잘 가르는 값
+    const thr = +$('thr').value, lum = [];
+    for (let i = 0, p = 0; i < m.length; i++, p += 4) {
+      if (m[i] >= thr) lum.push(Math.round(0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]));
+    }
+    if (lum.length) $('duoThr').value = otsu(lum);
+  }
 }
 
 // 명암 분포를 두 무리로 가장 잘 가르는 값 (Otsu)
@@ -600,37 +608,52 @@ function getDownRuns(thr) {
   return down;
 }
 
-// 글 속 글자들이 실제로 그려지는 범위 (100px 기준 비율). 윤곽 밖으로 획이 나가지 않게 이 값으로 자리를 잡는다.
+// 글자 하나가 실제로 그려지는 범위 (100px 기준): 기준선 위·아래, 그리는 점 왼쪽·오른쪽
+const inkCache = new Map();
+function charInk(family, bold, italic, ch) {
+  const key = `${family}|${bold}|${italic}|${ch}`;
+  let m = inkCache.get(key);
+  if (!m) {
+    measureCtx.font = fontStr(family, bold, italic, 100);
+    const t = measureCtx.measureText(ch);
+    m = {
+      asc: t.actualBoundingBoxAscent / 100,
+      desc: t.actualBoundingBoxDescent / 100,
+      left: t.actualBoundingBoxLeft / 100,
+      right: t.actualBoundingBoxRight / 100,
+    };
+    inkCache.set(key, m);
+  }
+  return m;
+}
+
+// 줄 간격과 줄 위치를 잡는 데 쓰는 '보통 글자' 높이: 글 속 글자들의 가운데값.
+// (이모지·괄호처럼 유난히 큰 글자 몇 개 때문에 모든 줄이 넓어지지 않게 최댓값이 아니라 가운데값)
 function glyphMetrics(family, src) {
-  let asc = 0, desc = 0, overL = 0, overR = 0, underline = false;
+  const ascs = [], descs = [];
   const seen = new Set();
   for (const it of src) {
-    if (it.underline) underline = true;
     const key = `${it.bold}|${it.italic}|${it.ch}`;
     if (it.ch === ' ' || seen.has(key)) continue;
     seen.add(key);
-    measureCtx.font = fontStr(family, it.bold, it.italic, 100);
-    const m = measureCtx.measureText(it.ch);
-    asc = Math.max(asc, m.actualBoundingBoxAscent);
-    desc = Math.max(desc, m.actualBoundingBoxDescent);
-    overL = Math.max(overL, m.actualBoundingBoxLeft);
-    overR = Math.max(overR, m.actualBoundingBoxRight - m.width);
+    const m = charInk(family, it.bold, it.italic, it.ch);
+    ascs.push(m.asc);
+    descs.push(m.desc);
   }
-  if (!asc) { asc = 88; desc = 12; }
-  if (underline) desc = Math.max(desc, 17);  // 밑줄은 기준선 아래 0.1~0.16
-  return { asc: asc / 100, desc: desc / 100, overL: Math.max(0, overL) / 100, overR: Math.max(0, overR) / 100 };
+  const mid = a => a.sort((p, q) => p - q)[a.length >> 1];
+  return ascs.length ? { asc: mid(ascs), desc: mid(descs) } : { asc: 0.88, desc: 0.12 };
 }
 
-// 일러스트레이터의 영역 문자처럼: 글자 하나하나가 (획 두께까지) 윤곽 안에 완전히 들어가는 자리에만 놓는다.
-// 위에서부터 줄마다 윤곽 안쪽 가로 구간을 찾아 왼쪽→오른쪽으로 글자 단위로 채운다.
+// 일러스트레이터의 영역 문자처럼: 글자 하나하나가 (획 두께·밑줄까지) 윤곽 안에 완전히 들어가는 자리에만 놓는다.
+// 위에서부터 줄마다 왼쪽→오른쪽으로 글자 단위로 채우고, 글자마다 자기 크기로 윤곽 안인지 검사한다.
 // 줄 높이는 그 줄에 실제로 들어간 가장 큰 글자에 맞춘다.
 function layout(src, base, o, onLine) {
   const { mw, mh } = state;
   const down = getDownRuns(o.thr);
-  const { asc, desc, overL, overR } = o.metrics;
+  const { asc, desc } = o.metrics;
   const n = src.length;
   const inside = new Uint8Array(mw);
-  let idx = 0, y = 0, totalArea = 0, emptyArea = 0;
+  let idx = 0, y = 0, totalArea = 0, emptyArea = 0, placedCount = 0;
 
   const peekSize = () => {
     for (let k = 0; k < n; k++) {
@@ -641,52 +664,68 @@ function layout(src, base, o, onLine) {
     return base;
   };
 
-  // 줄 윗선이 y이고 가장 큰 글자가 h일 때, 기준선과 글자가 차지하는 세로 범위
+  // 줄 윗선이 top이고 가장 큰 글자가 h일 때의 기준선, 그리고 보통 글자가 차지하는 세로 범위
   const band = (top, h) => {
-    const sw = h * o.stroke / 2;
     const pitch = h * o.lh;
     const baseline = top + (pitch - (asc + desc) * h) / 2 + asc * h;
-    return { pitch, baseline, sw, y0: Math.floor(baseline - asc * h - sw), y1: Math.ceil(baseline + desc * h + sw) };
+    return { pitch, baseline, y0: Math.floor(baseline - asc * h), y1: Math.ceil(baseline + desc * h) };
   };
 
+  // 보통 글자 높이로 본 윤곽 안쪽 열 (글자를 놓을 후보 구간과 채움 비율 계산용)
   const scan = (y0, y1) => {
     const need = y1 - y0 + 1, row = y0 * mw;
     for (let x = 0; x < mw; x++) inside[x] = down[row + x] >= need ? 1 : 0;
   };
 
-  const fill = (start, h, sw) => {
-    let i = start, maxH = 0, area = 0, empty = 0;
-    const lines = [];
+  // 글자 it를 x에 놓았을 때 획이 전부 윤곽 안인지. 밖이면 걸리는 가장 오른쪽 열을, 안이면 -1을 돌려준다.
+  const blockedAt = (it, x, baseline, w) => {
+    const s = it.scale * base, sw = s * o.stroke / 2;
+    const m = charInk(o.family, it.bold, it.italic, it.ch);
+    const d = it.underline ? Math.max(m.desc, 0.17) : m.desc;
+    const y0 = Math.floor(baseline - m.asc * s - sw), y1 = Math.ceil(baseline + d * s + sw);
+    let x0 = Math.floor(x - m.left * s - sw), x1 = Math.ceil(x + m.right * s + sw);
+    if (it.underline) { x0 = Math.min(x0, Math.floor(x)); x1 = Math.max(x1, Math.ceil(x + w)); }
+    if (y0 < 0 || y1 > mh - 1 || x0 < 0 || x1 > mw - 1) return x1;
+    const need = y1 - y0 + 1, row = y0 * mw;
+    for (let c = x1; c >= x0; c--) if (down[row + c] < need) return c;
+    return -1;
+  };
+
+  const fill = (start, h, baseline) => {
+    let i = start, maxH = 0, area = 0, empty = 0, placed = 0;
+    const items = [], widths = [], xs = [];
     const minW = Math.min(h, base) * 0.9;
-    // 획이 글자 폭 밖으로 삐져나오는 만큼 구간 양 끝을 비운다
-    const padL = Math.ceil(overL * h + sw), padR = Math.ceil(overR * h + sw);
     let x = 0;
     while (x < mw) {
       while (x < mw && !inside[x]) x++;
-      const start0 = x;
+      const a = x;
       while (x < mw && inside[x]) x++;
-      const a = start0 + padL;
-      const runW = x - start0 - padL - padR;
-      if (runW < minW) continue;
-      area += runW;
-      if (i >= n && !o.repeat) { empty += runW; continue; }
+      const runEnd = x;
+      if (runEnd - a < minW) continue;
+      area += runEnd - a;
+      if (i >= n && !o.repeat) { empty += runEnd - a; continue; }
 
-      const items = [], widths = [];
-      let used = 0;
-      while (items.length < 5000) {
+      // 구간 안에서 글자를 하나씩 놓는다. 윤곽에 걸리는 글자는 걸린 곳 너머로 옮겨 다시 시도한다.
+      let cx = a, fresh = true, tries = 0;
+      while (cx < runEnd && tries++ < 5000) {
         if (i >= n) { if (o.repeat) i = 0; else break; }
         const it = src[i];
-        if (!items.length && it.ch === ' ') { i++; continue; }
+        if (fresh && it.ch === ' ') { i++; continue; }       // 끊긴 자리 첫머리의 공백은 버린다
         const w = charWidth100(o.family, it.bold, it.italic, it.ch) * it.scale * base / 100;
-        if (used + w > runW) break;
-        items.push(it); widths.push(w); used += w; i++;
+        if (cx + w > runEnd + 0.5) break;
+        const hit = blockedAt(it, cx, baseline, w);
+        if (hit >= 0) {
+          cx = Math.max(cx + 1, hit + 1);                    // 걸린 열 다음부터 다시
+          fresh = true;
+          continue;
+        }
+        items.push(it); widths.push(w); xs.push(cx);
+        maxH = Math.max(maxH, it.scale * base);
+        if (it.ch !== ' ') placed++;
+        cx += w; i++; fresh = false;
       }
-      while (items.length && items[items.length - 1].ch === ' ') { items.pop(); used -= widths.pop(); }
-      if (!items.length) continue;
-      for (const it of items) maxH = Math.max(maxH, it.scale * base);
-      lines.push({ items, widths, a });
     }
-    return { i, maxH, area, empty, lines };
+    return { i, maxH, area, empty, placed, line: { items, widths, xs } };
   };
 
   for (;;) {
@@ -695,17 +734,18 @@ function layout(src, base, o, onLine) {
     for (let iter = 0; iter < 4; iter++) {
       b = band(y, h);
       if (b.y1 > mh - 1) { res = null; break; }           // 그림 아래 끝
-      if (b.y0 < 0) { res = { i: idx, maxH: 0, area: 0, empty: 0, lines: [] }; break; }
+      if (b.y0 < 0) { res = { i: idx, maxH: 0, area: 0, empty: 0, placed: 0, line: null }; break; }
       scan(b.y0, b.y1);
-      res = fill(idx, h, b.sw);
+      res = fill(idx, h, b.baseline);
       if (res.maxH <= h + 0.01 || iter === 3) break;
       h = res.maxH;
     }
     if (!res) break;
     totalArea += res.area;
     emptyArea += res.empty;
+    placedCount += res.placed;
     idx = res.i;
-    if (onLine) for (const line of res.lines) onLine(line, b.baseline);
+    if (onLine && res.line && res.line.items.length) onLine(res.line, b.baseline);
     // 글자가 들어갈 자리가 없는 줄은 조금씩만 내려가서, 모양이 시작되는 곳에서 바로 첫 줄이 시작되게 한다
     y += res.area > 0 ? b.pitch : Math.max(1, h * 0.1);
   }
@@ -713,7 +753,15 @@ function layout(src, base, o, onLine) {
     remaining: o.repeat ? 0 : Math.max(0, n - idx),
     fillRatio: totalArea ? 1 - emptyArea / totalArea : 0,
     hasSpace: totalArea > 0,
+    placed: placedCount,     // 실제로 놓인 글자 수 (공백 제외)
   };
+}
+
+// 글이 모자랄 때: 같은 글을 반복해 끝까지 채워 보고, 몇 자가 더 들어가는지 센다
+function missingChars(src, base, o) {
+  const full = layout([...src, { ...src[src.length - 1], ch: ' ' }], base, { ...o, repeat: true });
+  const have = src.reduce((c, s) => c + (s.ch === ' ' ? 0 : 1), 0);
+  return Math.max(0, full.placed - have);
 }
 
 // 글이 딱 한 번 다 들어가는 가장 큰 기본 크기
@@ -737,7 +785,9 @@ function readOptions() {
     repeat: !auto && $('repeat').checked,
     lh: +$('lh').value,
     colorMode: document.querySelector('[name=colorMode]:checked').value,
-    color: $('color').value,
+    duoDark: $('duoDark').value,
+    duoLight: $('duoLight').value,
+    duoThr: +$('duoThr').value,
     quant: +$('quant').value,
     stroke: +$('stroke').value / 100,
     format: $('format').value,
@@ -799,26 +849,32 @@ function paint(canvas, outW, outH, o, src, base) {
         r = rgba[p]; g = rgba[p + 1]; b = rgba[p + 2]; cnt = 1;
       }
       let c = [r / cnt, g / cnt, b / cnt];
+      // 두 색: 그 자리가 어두우면 어두운 곳 색, 밝으면 밝은 곳 색
+      if (o.colorMode === 'duo') return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < o.duoThr ? o.duoDark : o.duoLight;
       if (palette) c = nearest(palette, c[0], c[1], c[2]);
       return `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`;
     };
     result = layout(src, base, o, (line, baseline) => {
-      const { items, widths } = line;
-      let x = line.a;
+      const { items, widths, xs } = line;
       for (let k = 0; k < items.length; k++) {
-        const it = items[k], w = widths[k], px = it.scale * base;
+        const it = items[k], w = widths[k], px = it.scale * base, x = xs[k];
         const f = fontStr(o.family, it.bold, it.italic, px);
-        if (f !== lastFont) ctx.font = lastFont = f;
-        ctx.fillStyle = it.color || (o.colorMode === 'image' ? sample(x, baseline - px * 0.8, w, px * 0.8) : o.color);
-        ctx.fillText(it.ch, x, baseline);
-        // 획을 두껍게 하면 글자 사이 빈틈이 줄어 멀리서 그림이 더 진하게 보인다
-        if (o.stroke > 0) {
-          ctx.strokeStyle = ctx.fillStyle;
-          ctx.lineWidth = px * o.stroke;
-          ctx.strokeText(it.ch, x, baseline);
+        const color = it.color || sample(x, baseline - px * 0.8, w, px * 0.8);
+        if (EMOJI.test(it.ch)) {
+          drawTintedEmoji(ctx, it.ch, x, baseline, w, px, f, color, o.stroke, r);
+        } else {
+          if (f !== lastFont) ctx.font = lastFont = f;
+          ctx.fillStyle = color;
+          ctx.fillText(it.ch, x, baseline);
+          // 획을 두껍게 하면 글자 사이 빈틈이 줄어 멀리서 그림이 더 진하게 보인다
+          if (o.stroke > 0) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = px * o.stroke;
+            ctx.strokeText(it.ch, x, baseline);
+          }
         }
+        ctx.fillStyle = color;
         if (it.underline) ctx.fillRect(x, baseline + px * 0.1, w, Math.max(0.5, px * 0.06));
-        x += w;
       }
     });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -839,6 +895,41 @@ function paint(canvas, outW, outH, o, src, base) {
   }
   ctx.globalCompositeOperation = 'source-over';
   return result;
+}
+
+// 컬러 이모지는 fillStyle을 무시하고 제 색으로 그려진다.
+// 따로 그린 뒤 그 모양만 남기고 원하는 색으로 덮어 다른 글자처럼 한 색으로 만든다.
+const EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u;
+const emojiCanvas = document.createElement('canvas');
+function drawTintedEmoji(ctx, ch, x, baseline, w, px, font, color, stroke, r) {
+  const pad = px * (0.3 + stroke);
+  const bx = x - pad, by = baseline - px * 1.2 - pad;
+  const bw = w + pad * 2, bh = px * 1.5 + pad * 2;
+  const cw = Math.max(1, Math.ceil(bw * r)), ch2 = Math.max(1, Math.ceil(bh * r));
+  if (emojiCanvas.width < cw || emojiCanvas.height < ch2) {
+    emojiCanvas.width = Math.max(emojiCanvas.width, cw);
+    emojiCanvas.height = Math.max(emojiCanvas.height, ch2);
+  }
+  const t = emojiCanvas.getContext('2d');
+  t.setTransform(1, 0, 0, 1, 0, 0);
+  t.globalCompositeOperation = 'source-over';
+  t.clearRect(0, 0, cw, ch2);
+  t.setTransform(r, 0, 0, r, -bx * r, -by * r);
+  t.font = font;
+  t.textBaseline = 'alphabetic';
+  t.fillStyle = '#000';
+  t.fillText(ch, x, baseline);
+  if (stroke > 0) {
+    t.lineJoin = 'round';
+    t.strokeStyle = '#000';
+    t.lineWidth = px * stroke;
+    t.strokeText(ch, x, baseline);
+  }
+  t.setTransform(1, 0, 0, 1, 0, 0);
+  t.globalCompositeOperation = 'source-in';
+  t.fillStyle = color;
+  t.fillRect(0, 0, cw, ch2);
+  ctx.drawImage(emojiCanvas, 0, 0, cw, ch2, bx, by, cw / r, ch2 / r);
 }
 
 // 저장 크기: 원본 픽셀 × 배율 (상한을 넘으면 비율 유지하며 줄인다)
@@ -865,7 +956,7 @@ async function render() {
   const o = readOptions();
   const { src, base } = await computeLayout(o);
   if (token !== renderToken) return;
-  if (o.auto) $('fsOut').value = `${Math.round(base * 10) / 10}`;
+  if (o.auto) numFor('fs').value = Math.round(base * 10) / 10;
 
   const [pw, ph] = previewSize(o.outScale);
   const res = paint($('preview'), pw, ph, o, src, base);
@@ -873,30 +964,58 @@ async function render() {
   if (!src.length) setStatus('채울 글을 입력하세요.');
   else if (!res.hasSpace) setStatus('글자가 들어갈 자리가 없습니다. 기본 글자 크기나 경계값을 낮추세요.', true);
   else if (res.remaining > 0) setStatus(`자리가 모자라 ${res.remaining.toLocaleString()}자가 빠졌습니다. 기본 글자 크기를 줄이세요.`, true);
-  else if (!o.repeat && res.fillRatio < 0.97) setStatus(`글이 모자라 모양의 ${Math.round(res.fillRatio * 100)}%만 채워졌습니다.`);
+  else if (!o.auto && !o.repeat && res.fillRatio < 0.97) {
+    const more = missingChars(src, base, o);
+    setStatus(`글이 모자라 모양의 ${Math.round(res.fillRatio * 100)}%만 채워졌습니다. 약 ${more.toLocaleString()}자 더 쓰면 꽉 찹니다.`);
+  }
   else setStatus('');
 }
 
 let timer = 0;
 function schedule() { clearTimeout(timer); timer = setTimeout(render, 80); }
 
+// 슬라이더 옆 숫자 칸 (data-for로 짝지은 슬라이더)
+const numFor = id => document.querySelector(`.num[data-for="${id}"]`);
+
+function bindNumbers() {
+  document.querySelectorAll('.num').forEach(num => {
+    const range = $(num.dataset.for);
+    num.addEventListener('input', () => {
+      const v = parseFloat(num.value);
+      if (!Number.isFinite(v)) return;
+      range.value = Math.min(+range.max, Math.max(+range.min, v));
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    // 칸을 벗어나면 범위 밖 값은 슬라이더 값으로 되돌린다
+    num.addEventListener('change', () => { num.value = range.value; });
+    range.addEventListener('input', () => { if (document.activeElement !== num) num.value = range.value; });
+  });
+}
+
+function syncNumbers() {
+  document.querySelectorAll('.num').forEach(num => {
+    const range = $(num.dataset.for);
+    num.min = range.min; num.max = range.max; num.step = range.step;
+    num.disabled = range.disabled;
+    const skip = document.activeElement === num || (num.dataset.for === 'fs' && range.disabled) || num.dataset.for === 'zoom';
+    if (!skip) num.value = range.value;
+  });
+}
+
 function syncControls() {
   const auto = $('autoFit').checked;
   $('fs').disabled = auto;
   $('repeatWrap').classList.toggle('disabled', auto);
-  if (!auto) $('fsOut').value = $('fs').value;
-  $('lhOut').value = (+$('lh').value).toFixed(2);
-  $('ghostOut').value = `${$('ghost').value}%`;
-  $('thrOut').value = $('thr').value;
-  $('color').hidden = document.querySelector('[name=colorMode]:checked').value !== 'solid';
+  syncNumbers();
+  const colorMode = document.querySelector('[name=colorMode]:checked').value;
+  $('duoWrap').hidden = colorMode !== 'duo';
   $('bg').hidden = document.querySelector('[name=bgMode]:checked').value !== 'solid';
   const count = editor.textContent.replace(/\s+/g, '').length;
   $('charCount').value = count ? `${count.toLocaleString()}자` : '';
   editor.style.fontFamily = `"${currentFamily()}", "Malgun Gothic", sans-serif`;
   $('removeFont').hidden = !state.fonts[+$('font').value].user;
-  $('quantWrap').hidden = document.querySelector('[name=colorMode]:checked').value === 'solid';
+  $('quantWrap').hidden = colorMode !== 'image';
   $('thrWrap').hidden = maskMode() === 'full';
-  $('strokeOut').value = +$('stroke').value ? `${$('stroke').value}%` : '없음';
   const q = +$('quant').value;
   $('quantOut').value = q > 16 ? '원본' : `${q}색`;
   const jpg = $('format').value === 'jpg';
@@ -959,6 +1078,7 @@ async function save() {
 
 // ---------- 이벤트 ----------
 setupFonts();
+bindNumbers();
 
 for (const id of ['pick', 'pick2']) $(id).onclick = () => $('file').click();
 $('file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };

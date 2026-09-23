@@ -68,6 +68,22 @@ h2 { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.0
 .label { color: var(--muted); }
 .note { margin: 0; color: var(--muted); font-size: 12px; word-break: break-all; }
 output { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* 슬라이더 옆 숫자 칸: 직접 입력하거나 화살표로 한 칸씩 */
+.num-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.num {
+  width: 64px; height: 26px; padding: 0 4px 0 8px;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: var(--panel); color: var(--ink);
+  font: inherit; font-variant-numeric: tabular-nums; text-align: right;
+}
+.num:hover { border-color: var(--muted); }
+.num:disabled { opacity: 0.5; }
+.unit { color: var(--muted); font-size: 12px; }
+
+.duo { display: flex; flex-direction: column; gap: 10px; }
+.swatch-field { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.swatch-field input[type=color] { width: 44px; height: 28px; flex: none; }
 .head.sub output { color: var(--muted); }
 
 .row { display: flex; gap: 6px; align-items: center; }

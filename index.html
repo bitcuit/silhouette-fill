@@ -83,7 +83,7 @@
           </div>
         </div>
         <div class="field" id="thrWrap">
-          <div class="head"><span class="label">경계값</span><output id="thrOut"></output></div>
+          <div class="head"><span class="label">경계값</span><span class="num-wrap"><input type="number" class="num" data-for="thr" aria-label="경계값"></span></div>
           <input type="range" id="thr" min="1" max="255" step="1" value="128">
         </div>
       </section>
@@ -92,12 +92,12 @@
         <h2>크기</h2>
         <label class="check"><input type="checkbox" id="autoFit" checked>글 길이에 맞춰 그림 꽉 채우기</label>
         <div class="field">
-          <div class="head"><span class="label">기본 글자 크기</span><output id="fsOut"></output></div>
+          <div class="head"><span class="label">기본 글자 크기</span><span class="num-wrap"><input type="number" class="num" data-for="fs" aria-label="기본 글자 크기"></span></div>
           <input type="range" id="fs" min="3" max="200" step="1" value="24" disabled>
         </div>
         <label class="check" id="repeatWrap"><input type="checkbox" id="repeat" checked>글이 모자라면 반복</label>
         <div class="field">
-          <div class="head"><span class="label">획 두께</span><output id="strokeOut"></output></div>
+          <div class="head"><span class="label">획 두께</span><span class="num-wrap"><input type="number" class="num" data-for="stroke" aria-label="획 두께"><span class="unit">%</span></span></div>
           <input type="range" id="stroke" min="0" max="12" step="1" value="0">
         </div>
       </section>
@@ -105,7 +105,7 @@
       <section>
         <h2>줄</h2>
         <div class="field">
-          <div class="head"><span class="label">줄 간격</span><output id="lhOut"></output></div>
+          <div class="head"><span class="label">줄 간격</span><span class="num-wrap"><input type="number" class="num" data-for="lh" aria-label="줄 간격"></span></div>
           <input type="range" id="lh" min="0.8" max="2" step="0.05" value="1.1">
         </div>
       </section>
@@ -117,9 +117,16 @@
         <h2>글자</h2>
         <div class="seg two">
           <label><input type="radio" name="colorMode" value="image" checked>그림 색</label>
-          <label><input type="radio" name="colorMode" value="solid">단색</label>
+          <label><input type="radio" name="colorMode" value="duo">두 색</label>
         </div>
-        <input type="color" id="color" value="#111111" aria-label="글자 색" hidden>
+        <div id="duoWrap" class="duo" hidden>
+          <label class="swatch-field"><input type="color" id="duoDark" value="#000000">어두운 곳</label>
+          <label class="swatch-field"><input type="color" id="duoLight" value="#ffffff">밝은 곳</label>
+          <div class="field">
+            <div class="head"><span class="label">나누는 밝기</span><span class="num-wrap"><input type="number" class="num" data-for="duoThr" aria-label="나누는 밝기"></span></div>
+            <input type="range" id="duoThr" min="1" max="255" step="1" value="128">
+          </div>
+        </div>
         <div class="field" id="quantWrap">
           <div class="head"><span class="label">색 단순화</span><output id="quantOut"></output></div>
           <input type="range" id="quant" min="2" max="17" step="1" value="17">
@@ -134,7 +141,7 @@
         </div>
         <input type="color" id="bg" value="#ffffff" aria-label="배경 색" hidden>
         <div class="field">
-          <div class="head"><span class="label">원본 비치기</span><output id="ghostOut"></output></div>
+          <div class="head"><span class="label">원본 비치기</span><span class="num-wrap"><input type="number" class="num" data-for="ghost" aria-label="원본 비치기"><span class="unit">%</span></span></div>
           <input type="range" id="ghost" min="0" max="100" step="1" value="0">
         </div>
       </section>
@@ -175,7 +182,7 @@
       <label class="check"><input type="checkbox" id="whiteView" checked>투명 부분 흰색으로 보기</label>
       <button class="tool text" id="zoomFit" aria-pressed="true">맞춤</button>
       <input type="range" id="zoom" min="5" max="400" step="1" value="100" aria-label="확대/축소">
-      <output id="zoomOut"></output>
+      <span class="num-wrap"><input type="number" class="num" data-for="zoom" aria-label="확대/축소"><span class="unit">%</span></span>
     </div>
   </div>
 </main>
