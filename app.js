@@ -12,7 +12,7 @@ const state = {
   mw: 0, mh: 0,            // 분석 해상도
   rgba: null,              // 분석 해상도 원본 픽셀
   mask: null,              // 0~255, 경계값 이상이면 모양 안쪽
-  maskKey: '', maskCanvas: null,
+  down: null, downKey: '',  // 열마다 아래로 이어지는 모양 안쪽 길이 (getDownRuns)
   bgColor: null,           // 투명 없는 그림의 가장자리 색
   opaque: false,
   fonts: [],
@@ -347,7 +347,7 @@ function rebuildMask(resetThreshold) {
     m[i] = Math.min(255, Math.round(d));
   }
   state.mask = m;
-  state.maskKey = '';
+  state.downKey = '';
   state.paletteKey = '';
   if (resetThreshold) $('thr').value = mode === 'bg' ? Math.min(200, Math.max(24, otsu(m))) : 128;
 }
@@ -373,20 +373,6 @@ function otsu(m) {
   return Math.min(255, Math.max(1, t + 1));
 }
 
-function getMaskCanvas(thr) {
-  const key = `${maskMode()}|${thr}`;
-  if (state.maskKey === key) return state.maskCanvas;
-  const { mask, mw, mh } = state;
-  const c = document.createElement('canvas');
-  c.width = mw; c.height = mh;
-  const cx = c.getContext('2d');
-  const id = cx.createImageData(mw, mh);
-  for (let i = 0; i < mask.length; i++) id.data[i * 4 + 3] = mask[i] >= thr ? 255 : 0;
-  cx.putImageData(id, 0, 0);
-  state.maskKey = key;
-  state.maskCanvas = c;
-  return c;
-}
 
 // ---------- 색 단순화 ----------
 // 모양 안쪽 픽셀에서 대표색 k개를 뽑는다 (k-means, 시드 고정이라 매번 같은 결과)
@@ -597,11 +583,52 @@ function extractRuns() {
 }
 
 // ---------- 배치 ----------
-// 줄마다 글자 몸통 높이 전체가 모양 안에 드는 가로 구간을 찾아 글자 단위로 차례로 채운다.
+// 열마다 '여기서부터 아래로 몇 px이 모양 안쪽인지'. 한 줄 높이가 통째로 안쪽인지 한 번에 알 수 있다.
+function getDownRuns(thr) {
+  const key = `${maskMode()}|${thr}`;
+  if (state.downKey === key) return state.down;
+  const { mask, mw, mh } = state;
+  const down = new Uint16Array(mw * mh);
+  for (let y = mh - 1; y >= 0; y--) {
+    const row = y * mw, next = row + mw;
+    for (let x = 0; x < mw; x++) {
+      down[row + x] = mask[row + x] >= thr ? (y === mh - 1 ? 1 : down[next + x] + 1) : 0;
+    }
+  }
+  state.down = down;
+  state.downKey = key;
+  return down;
+}
+
+// 글 속 글자들이 실제로 그려지는 범위 (100px 기준 비율). 윤곽 밖으로 획이 나가지 않게 이 값으로 자리를 잡는다.
+function glyphMetrics(family, src) {
+  let asc = 0, desc = 0, overL = 0, overR = 0, underline = false;
+  const seen = new Set();
+  for (const it of src) {
+    if (it.underline) underline = true;
+    const key = `${it.bold}|${it.italic}|${it.ch}`;
+    if (it.ch === ' ' || seen.has(key)) continue;
+    seen.add(key);
+    measureCtx.font = fontStr(family, it.bold, it.italic, 100);
+    const m = measureCtx.measureText(it.ch);
+    asc = Math.max(asc, m.actualBoundingBoxAscent);
+    desc = Math.max(desc, m.actualBoundingBoxDescent);
+    overL = Math.max(overL, m.actualBoundingBoxLeft);
+    overR = Math.max(overR, m.actualBoundingBoxRight - m.width);
+  }
+  if (!asc) { asc = 88; desc = 12; }
+  if (underline) desc = Math.max(desc, 17);  // 밑줄은 기준선 아래 0.1~0.16
+  return { asc: asc / 100, desc: desc / 100, overL: Math.max(0, overL) / 100, overR: Math.max(0, overR) / 100 };
+}
+
+// 일러스트레이터의 영역 문자처럼: 글자 하나하나가 (획 두께까지) 윤곽 안에 완전히 들어가는 자리에만 놓는다.
+// 위에서부터 줄마다 윤곽 안쪽 가로 구간을 찾아 왼쪽→오른쪽으로 글자 단위로 채운다.
 // 줄 높이는 그 줄에 실제로 들어간 가장 큰 글자에 맞춘다.
 function layout(src, base, o, onLine) {
-  const { mask, mw, mh } = state;
-  const n = src.length, thr = o.thr;
+  const { mw, mh } = state;
+  const down = getDownRuns(o.thr);
+  const { asc, desc, overL, overR } = o.metrics;
+  const n = src.length;
   const inside = new Uint8Array(mw);
   let idx = 0, y = 0, totalArea = 0, emptyArea = 0;
 
@@ -614,29 +641,32 @@ function layout(src, base, o, onLine) {
     return base;
   };
 
-  const scan = (top, h) => {
-    const y0 = Math.max(0, Math.floor(top + h * 0.08));
-    const y1 = Math.min(mh - 1, Math.ceil(top + h * 0.92));
-    const step = Math.max(1, Math.floor(h / 6));
-    inside.fill(1);
-    for (let yy = y0; ; yy += step) {
-      if (yy > y1) yy = y1;
-      const row = yy * mw;
-      for (let x = 0; x < mw; x++) if (mask[row + x] < thr) inside[x] = 0;
-      if (yy === y1) break;
-    }
+  // 줄 윗선이 y이고 가장 큰 글자가 h일 때, 기준선과 글자가 차지하는 세로 범위
+  const band = (top, h) => {
+    const sw = h * o.stroke / 2;
+    const pitch = h * o.lh;
+    const baseline = top + (pitch - (asc + desc) * h) / 2 + asc * h;
+    return { pitch, baseline, sw, y0: Math.floor(baseline - asc * h - sw), y1: Math.ceil(baseline + desc * h + sw) };
   };
 
-  const fill = (start, h) => {
+  const scan = (y0, y1) => {
+    const need = y1 - y0 + 1, row = y0 * mw;
+    for (let x = 0; x < mw; x++) inside[x] = down[row + x] >= need ? 1 : 0;
+  };
+
+  const fill = (start, h, sw) => {
     let i = start, maxH = 0, area = 0, empty = 0;
     const lines = [];
     const minW = Math.min(h, base) * 0.9;
+    // 획이 글자 폭 밖으로 삐져나오는 만큼 구간 양 끝을 비운다
+    const padL = Math.ceil(overL * h + sw), padR = Math.ceil(overR * h + sw);
     let x = 0;
     while (x < mw) {
       while (x < mw && !inside[x]) x++;
-      const a = x;
+      const start0 = x;
       while (x < mw && inside[x]) x++;
-      const runW = x - a;
+      const a = start0 + padL;
+      const runW = x - start0 - padL - padR;
       if (runW < minW) continue;
       area += runW;
       if (i >= n && !o.repeat) { empty += runW; continue; }
@@ -661,13 +691,13 @@ function layout(src, base, o, onLine) {
 
   for (;;) {
     let h = idx >= n && !o.repeat ? base : peekSize();
-    let res = null, top = 0, pitch = 0;
+    let res = null, b = null;
     for (let iter = 0; iter < 4; iter++) {
-      pitch = h * o.lh;
-      top = y + (pitch - h) / 2;
-      if (top + h * 0.92 > mh) { res = null; break; }
-      scan(top, h);
-      res = fill(idx, h);
+      b = band(y, h);
+      if (b.y1 > mh - 1) { res = null; break; }           // 그림 아래 끝
+      if (b.y0 < 0) { res = { i: idx, maxH: 0, area: 0, empty: 0, lines: [] }; break; }
+      scan(b.y0, b.y1);
+      res = fill(idx, h, b.sw);
       if (res.maxH <= h + 0.01 || iter === 3) break;
       h = res.maxH;
     }
@@ -675,11 +705,9 @@ function layout(src, base, o, onLine) {
     totalArea += res.area;
     emptyArea += res.empty;
     idx = res.i;
-    if (onLine) {
-      const baseline = top + h * 0.86;
-      for (const line of res.lines) onLine(line, baseline, h);
-    }
-    y += pitch;
+    if (onLine) for (const line of res.lines) onLine(line, b.baseline);
+    // 글자가 들어갈 자리가 없는 줄은 조금씩만 내려가서, 모양이 시작되는 곳에서 바로 첫 줄이 시작되게 한다
+    y += res.area > 0 ? b.pitch : Math.max(1, h * 0.1);
   }
   return {
     remaining: o.repeat ? 0 : Math.max(0, n - idx),
@@ -717,7 +745,6 @@ function readOptions() {
     bgMode: $('format').value === 'jpg' ? 'solid' : document.querySelector('[name=bgMode]:checked').value,
     bg: $('format').value === 'jpg' && document.querySelector('[name=bgMode]:checked').value === 'none' ? '#ffffff' : $('bg').value,
     ghost: +$('ghost').value / 100,
-    clip: $('clip').checked,
     thr: +$('thr').value,
     outScale: +$('outScale').value,
   };
@@ -735,6 +762,7 @@ async function computeLayout(o) {
       return document.fonts.load(fontStr(o.family, b === 'true', i === 'true', 100), text).catch(() => {});
     }));
   }
+  o.metrics = glyphMetrics(o.family, src);
   const base = src.length && o.auto ? autoFitSize(src, o) : o.fs;
   return { src, base };
 }
@@ -794,11 +822,6 @@ function paint(canvas, outW, outH, o, src, base) {
       }
     });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (o.clip) {
-      ctx.globalCompositeOperation = 'destination-in';
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(getMaskCanvas(o.thr), 0, 0, outW, outH);
-    }
   }
 
   // 글이 없을 땐 모양이 보이도록 원본을 옅게 깐다
@@ -967,7 +990,6 @@ document.querySelectorAll('.panel input, .panel select').forEach(el => {
   el.addEventListener('input', schedule);
 });
 document.querySelectorAll('[name=maskMode]').forEach(el => el.addEventListener('change', () => rebuildMask(true)));
-$('thr').addEventListener('input', () => { state.maskKey = ''; });
 
 // 서식 도구: 누를 때 편집기 선택이 풀리지 않게
 document.querySelectorAll('.tool[data-cmd], #clearFmt, #clearAllFmt').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
