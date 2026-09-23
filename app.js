@@ -357,6 +357,12 @@ function rebuildMask(resetThreshold) {
       if (m[i] >= thr) lum.push(Math.round(0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]));
     }
     if (lum.length) $('duoThr').value = otsu(lum);
+    // '한 색'에서 명도를 펼칠 범위: 모양 안쪽 밝기의 하위·상위 2% (흐린 사진도 명도 차이가 또렷하게)
+    if (lum.length) {
+      lum.sort((p, q) => p - q);
+      state.lumLo = lum[Math.floor(lum.length * 0.02)];
+      state.lumHi = lum[Math.floor(lum.length * 0.98)];
+    }
   }
 }
 
@@ -436,6 +442,18 @@ function getPalette(k, thr) {
   state.palette = cents.map(c => c.map(Math.round));
   state.paletteKey = key;
   return state.palette;
+}
+
+// #rrggbb → [색상(0~360), 채도(%), 명도(%)]
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, Math.round(l * 100)];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round(h * 60), Math.round(s * 100), Math.round(l * 100)];
 }
 
 function nearest(palette, r, g, b) {
@@ -750,7 +768,7 @@ function layout(src, base, o, onLine) {
     y += res.area > 0 ? b.pitch : Math.max(1, h * 0.1);
   }
   return {
-    remaining: o.repeat ? 0 : Math.max(0, n - idx),
+    remaining: o.repeat ? 0 : src.slice(idx).reduce((c, s) => c + (s.ch === ' ' ? 0 : 1), 0),  // 못 놓은 글자 수 (공백 제외)
     fillRatio: totalArea ? 1 - emptyArea / totalArea : 0,
     hasSpace: totalArea > 0,
     placed: placedCount,     // 실제로 놓인 글자 수 (공백 제외)
@@ -788,6 +806,7 @@ function readOptions() {
     duoDark: $('duoDark').value,
     duoLight: $('duoLight').value,
     duoThr: +$('duoThr').value,
+    monoHsl: hexToHsl($('monoColor').value),
     quant: +$('quant').value,
     stroke: +$('stroke').value / 100,
     format: $('format').value,
@@ -850,7 +869,16 @@ function paint(canvas, outW, outH, o, src, base) {
       }
       let c = [r / cnt, g / cnt, b / cnt];
       // 두 색: 그 자리가 어두우면 어두운 곳 색, 밝으면 밝은 곳 색
-      if (o.colorMode === 'duo') return 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < o.duoThr ? o.duoDark : o.duoLight;
+      const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+      if (o.colorMode === 'duo') return lum < o.duoThr ? o.duoDark : o.duoLight;
+      // 한 색: 기준 색의 색상·채도는 두고 명도만 그 자리 밝기로 (가장 어두워도 색이 보이게 18%~90%)
+      if (o.colorMode === 'mono') {
+        const lo = state.lumLo ?? 0, hi = state.lumHi ?? 255;
+        let t = Math.min(1, Math.max(0, (lum - lo) / Math.max(1, hi - lo)));
+        if (o.quant <= 16) t = Math.round(t * (o.quant - 1)) / (o.quant - 1);
+        const [hh, ss] = o.monoHsl;
+        return `hsl(${hh},${ss}%,${(18 + t * 72).toFixed(1)}%)`;
+      }
       if (palette) c = nearest(palette, c[0], c[1], c[2]);
       return `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`;
     };
@@ -963,7 +991,7 @@ async function render() {
 
   if (!src.length) setStatus('채울 글을 입력하세요.');
   else if (!res.hasSpace) setStatus('글자가 들어갈 자리가 없습니다. 기본 글자 크기나 경계값을 낮추세요.', true);
-  else if (res.remaining > 0) setStatus(`자리가 모자라 ${res.remaining.toLocaleString()}자가 빠졌습니다. 기본 글자 크기를 줄이세요.`, true);
+  else if (res.remaining > 0) setStatus(`이 글자 크기로는 ${res.remaining.toLocaleString()}자가 들어가지 않습니다. 크기를 줄이거나 '글 길이에 맞춰 그림 꽉 채우기'를 켜세요.`, true);
   else if (!o.auto && !o.repeat && res.fillRatio < 0.97) {
     const more = missingChars(src, base, o);
     setStatus(`글이 모자라 모양의 ${Math.round(res.fillRatio * 100)}%만 채워졌습니다. 약 ${more.toLocaleString()}자 더 쓰면 꽉 찹니다.`);
@@ -1014,10 +1042,11 @@ function syncControls() {
   $('charCount').value = count ? `${count.toLocaleString()}자` : '';
   editor.style.fontFamily = `"${currentFamily()}", "Malgun Gothic", sans-serif`;
   $('removeFont').hidden = !state.fonts[+$('font').value].user;
-  $('quantWrap').hidden = colorMode !== 'image';
+  $('quantWrap').hidden = colorMode === 'duo';
+  $('monoWrap').hidden = colorMode !== 'mono';
   $('thrWrap').hidden = maskMode() === 'full';
   const q = +$('quant').value;
-  $('quantOut').value = q > 16 ? '원본' : `${q}색`;
+  $('quantOut').value = q > 16 ? '원본' : colorMode === 'mono' ? `${q}단계` : `${q}색`;
   const jpg = $('format').value === 'jpg';
   $('save').textContent = jpg ? 'JPG 저장' : 'PNG 저장';
   $('formatNote').hidden = !(jpg && document.querySelector('[name=bgMode]:checked').value === 'none');

@@ -115,10 +115,12 @@
     <div class="tab-panel" data-panel="color" role="tabpanel" hidden>
       <section>
         <h2>글자</h2>
-        <div class="seg two">
+        <div class="seg">
           <label><input type="radio" name="colorMode" value="image" checked>그림 색</label>
+          <label><input type="radio" name="colorMode" value="mono">한 색</label>
           <label><input type="radio" name="colorMode" value="duo">두 색</label>
         </div>
+        <label class="swatch-field" id="monoWrap" hidden><input type="color" id="monoColor" value="#2b59c3">기준 색</label>
         <div id="duoWrap" class="duo" hidden>
           <label class="swatch-field"><input type="color" id="duoDark" value="#000000">어두운 곳</label>
           <label class="swatch-field"><input type="color" id="duoLight" value="#ffffff">밝은 곳</label>
