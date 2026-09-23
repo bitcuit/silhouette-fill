@@ -82,6 +82,7 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 .unit { color: var(--muted); font-size: 12px; }
 
 .duo { display: flex; flex-direction: column; gap: 10px; }
+.tone { display: flex; flex-direction: column; gap: 14px; }
 
 /* 타일 이미지 목록 */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }

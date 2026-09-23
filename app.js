@@ -915,6 +915,9 @@ function readOptions() {
     tileSize: state.img ? +$('tileSize').value * state.mw / state.img.width : 20,
     tileGap: +$('tileGap').value / 100,
     variety: +$('variety').value / 100,
+    bright: +$('bright').value / 100,
+    contrast: +$('contrast').value / 100,
+    maxLum: +$('maxLum').value / 100,
     strength: +$('strength').value / 100,
   };
 }
@@ -971,10 +974,20 @@ function makeColorer(o) {
       let t = Math.min(1, Math.max(0, (lum - lo) / Math.max(1, hi - lo)));
       if (o.quant <= 16) t = Math.round(t * (o.quant - 1)) / (o.quant - 1);
       const [hh, ss] = o.monoHsl;
-      return hslToRgb(hh, ss, 18 + t * 72);
+      return adjustTone(hslToRgb(hh, ss, 18 + t * 72), o);
     }
-    return palette ? nearest(palette, c[0], c[1], c[2]) : c;
+    return adjustTone(palette ? nearest(palette, c[0], c[1], c[2]) : c, o);
   };
+}
+// 명도 조정 (그림 색·한 색): 대비 → 밝기 → 최대 밝기 순서.
+// 최대 밝기는 색 비율을 두고 밝기만 낮춰, 흰색은 연회색이 되고 연한 색은 같은 색의 진한 쪽으로 간다.
+function adjustTone(c, o) {
+  const k = 1 + o.contrast, add = o.bright * 255;
+  let r = (c[0] - 128) * k + 128 + add, g = (c[1] - 128) * k + 128 + add, b = (c[2] - 128) * k + 128 + add;
+  r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b));
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b, cap = o.maxLum * 255;
+  if (lum > cap) { const s = cap / lum; r *= s; g *= s; b *= s; }
+  return [r, g, b];
 }
 const cssRgb = c => `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`;
 
@@ -1340,6 +1353,7 @@ function syncControls() {
   $('removeFont').hidden = !state.fonts[+$('font').value].user;
   $('quantWrap').hidden = colorMode === 'duo';
   $('monoWrap').hidden = colorMode !== 'mono';
+  $('toneWrap').hidden = colorMode === 'duo';
   $('thrWrap').hidden = maskMode() === 'full';
   $('whiteInnerWrap').hidden = maskMode() !== 'white';
   const q = +$('quant').value;

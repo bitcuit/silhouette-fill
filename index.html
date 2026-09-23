@@ -173,6 +173,20 @@
           <div class="head"><span class="label">색 보정 강도</span><span class="num-wrap"><input type="number" class="num" data-for="strength" aria-label="색 보정 강도"><span class="unit">%</span></span></div>
           <input type="range" id="strength" min="0" max="100" step="1" value="70">
         </div>
+        <div class="tone" id="toneWrap">
+          <div class="field">
+            <div class="head"><span class="label">밝기</span><span class="num-wrap"><input type="number" class="num" data-for="bright" aria-label="밝기"><span class="unit">%</span></span></div>
+            <input type="range" id="bright" min="-50" max="50" step="1" value="0">
+          </div>
+          <div class="field">
+            <div class="head"><span class="label">대비</span><span class="num-wrap"><input type="number" class="num" data-for="contrast" aria-label="대비"><span class="unit">%</span></span></div>
+            <input type="range" id="contrast" min="-50" max="100" step="1" value="0">
+          </div>
+          <div class="field">
+            <div class="head"><span class="label">최대 밝기</span><span class="num-wrap"><input type="number" class="num" data-for="maxLum" aria-label="최대 밝기"><span class="unit">%</span></span></div>
+            <input type="range" id="maxLum" min="50" max="100" step="1" value="100">
+          </div>
+        </div>
         <div class="field" id="quantWrap">
           <div class="head"><span class="label">색 단순화</span><output id="quantOut"></output></div>
           <input type="range" id="quant" min="2" max="17" step="1" value="17">
