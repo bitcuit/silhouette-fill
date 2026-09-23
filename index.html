@@ -109,6 +109,16 @@
           <input type="range" id="thr" min="1" max="255" step="1" value="128">
         </div>
         <label class="check" id="whiteInnerWrap" hidden><input type="checkbox" id="whiteInner">안쪽 흰색도 빼기</label>
+        <div class="field">
+          <div class="row">
+            <button class="btn line small" id="wandBtn" type="button" aria-pressed="false">마법봉</button>
+            <button class="tool text" id="wandUndo" type="button" hidden>되돌리기</button>
+            <button class="tool text" id="wandClear" type="button" hidden>모두 지우기</button>
+          </div>
+          <p class="note" id="wandNote" hidden>미리보기에서 빼거나 다시 넣을 곳을 누르세요. 비슷한 색으로 이어진 영역이 함께 바뀝니다.</p>
+          <div class="head"><span class="label">마법봉 허용 범위</span><span class="num-wrap"><input type="number" class="num" data-for="wandTol" aria-label="마법봉 허용 범위"></span></div>
+          <input type="range" id="wandTol" min="1" max="150" step="1" value="32">
+        </div>
       </section>
 
       <section class="image-only" hidden>

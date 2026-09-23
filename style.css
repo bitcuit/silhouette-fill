@@ -83,6 +83,10 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 
 .duo { display: flex; flex-direction: column; gap: 10px; }
 .tone { display: flex; flex-direction: column; gap: 14px; }
+.sec-head { display: flex; justify-content: space-between; align-items: center; min-height: 18px; margin-bottom: -4px; }
+.sec-head .tool.text { height: 22px; margin-right: -6px; }
+.btn.line[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+#preview.wand { cursor: crosshair; }
 
 /* 타일 이미지 목록 */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }

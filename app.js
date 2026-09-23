@@ -5,6 +5,8 @@ const MASK_MAX = 1400;     // 윤곽 분석 해상도 상한 (긴 변, px)
 const PREVIEW_CAP = 4096;  // 미리보기 캔버스 상한 (긴 변)
 const OUT_MAX = 8000;      // 저장 캔버스 상한
 
+const resetSections = [];   // 섹션별 초기화 버튼 {sec, btn} (아래 '섹션별 초기화'에서 채움)
+
 const state = {
   img: null, name: 'image',
   dpi: null,               // 원본 파일에 적힌 해상도 {x, y} (없으면 null)
@@ -15,6 +17,8 @@ const state = {
   down: null, downKey: '',  // 열마다 아래로 이어지는 모양 안쪽 길이 (getDownRuns)
   opaque: false,
   fonts: [],
+  edits: [],               // 마법봉으로 빼거나 되살린 영역 {add, region}
+  wand: false,             // 마법봉 켜짐
   tiles: [],               // 포토 모자이크 타일 이미지 {bmp, sx, sy, side, samples, colorAvg, name, thumb}
 };
 
@@ -176,9 +180,12 @@ async function loadFile(file) {
   const short = Math.min(img.width, img.height);
   $('tileSize').max = Math.max(8, Math.round(short / 4));
   $('tileSize').value = Math.max(6, Math.round(short / 40));
+  $('tileSize').defaultValue = $('tileSize').value;            // 초기화하면 이 그림 기준 값으로
   // 투명한 곳이 없는 그림은 기본으로 흰색을 빼고 나머지를 모양으로 쓴다
   const mode = opaque ? 'white' : 'alpha';
-  document.querySelector(`[name=maskMode][value=${mode}]`).checked = true;
+  document.querySelectorAll('[name=maskMode]').forEach(r => { r.checked = r.defaultChecked = r.value === mode; });
+  state.edits = [];
+  syncWandButtons();
   rebuildMask(true);
 
   // 저장 형식은 투명을 담을 수 있는 PNG가 기본 (흰색 제외로 바탕을 뺀 그림도 투명하게 저장되도록).
@@ -323,11 +330,16 @@ function rebuildMask(resetThreshold) {
   if (!rgba) return;
   const mode = maskMode();
   // 흰색 제외의 기본 경계값 40: JPG 압축 등으로 생긴 거의 흰 색까지 흰색으로 본다
-  if (resetThreshold) $('thr').value = mode === 'white' ? 40 : 128;
+  if (resetThreshold) $('thr').value = $('thr').defaultValue = mode === 'white' ? 40 : 128;
   const m = new Uint8Array(mw * mh);
   if (mode === 'white') buildWhiteMask(m, +$('thr').value, $('whiteInner').checked);
   else {
     for (let i = 0, p = 0; i < m.length; i++, p += 4) m[i] = mode === 'full' ? 255 : rgba[p + 3];
+  }
+  // 마법봉으로 고친 영역을 누른 순서대로 덮어쓴다
+  for (const e of state.edits) {
+    const v = e.add ? 255 : 0;
+    for (let i = 0; i < m.length; i++) if (e.region[i]) m[i] = v;
   }
   state.mask = m;
   state.downKey = '';
@@ -338,7 +350,7 @@ function rebuildMask(resetThreshold) {
     for (let i = 0, p = 0; i < m.length; i++, p += 4) {
       if (m[i] >= thr) lum.push(Math.round(0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]));
     }
-    if (lum.length) $('duoThr').value = otsu(lum);
+    if (lum.length) $('duoThr').value = $('duoThr').defaultValue = otsu(lum);
     // '한 색'에서 명도를 펼칠 범위: 모양 안쪽 밝기의 하위·상위 2% (흐린 사진도 명도 차이가 또렷하게)
     if (lum.length) {
       lum.sort((p, q) => p - q);
@@ -346,6 +358,46 @@ function rebuildMask(resetThreshold) {
       state.lumHi = lum[Math.floor(lum.length * 0.98)];
     }
   }
+}
+
+// ---------- 마법봉 ----------
+// 누른 픽셀과 색(투명도 포함)이 허용 범위 안인 픽셀을, 누른 곳에서부터 이어진 만큼 고른다
+function wandRegion(seed, tol) {
+  const { rgba, mw, mh } = state;
+  const region = new Uint8Array(mw * mh);
+  const stack = new Int32Array(mw * mh);
+  const p0 = seed * 4, r0 = rgba[p0], g0 = rgba[p0 + 1], b0 = rgba[p0 + 2], a0 = rgba[p0 + 3];
+  const t2 = tol * tol;
+  let top = 0;
+  const push = j => {
+    if (region[j]) return;
+    const p = j * 4;
+    const dr = rgba[p] - r0, dg = rgba[p + 1] - g0, db = rgba[p + 2] - b0, da = rgba[p + 3] - a0;
+    if (dr * dr + dg * dg + db * db + da * da > t2) return;
+    region[j] = 1;
+    stack[top++] = j;
+  };
+  push(seed);
+  while (top) {
+    const i = stack[--top], x = i % mw;
+    if (x > 0) push(i - 1);
+    if (x < mw - 1) push(i + 1);
+    if (i >= mw) push(i - mw);
+    if (i < (mh - 1) * mw) push(i + mw);
+  }
+  return region;
+}
+
+function setWand(on) {
+  state.wand = on;
+  $('wandBtn').setAttribute('aria-pressed', String(on));
+  $('wandNote').hidden = !on;
+  $('preview').classList.toggle('wand', on);
+  schedule();
+}
+
+function syncWandButtons() {
+  $('wandUndo').hidden = $('wandClear').hidden = !state.edits.length;
 }
 
 // 흰색 제외: 흰색(흰색에서 경계값보다 가까운 색)과 투명한 곳을 뺀다.
@@ -1273,6 +1325,8 @@ async function render() {
   if (o.auto && o.kind === 'text') numFor('fs').value = Math.round(base * 10) / 10;
 
   const [pw, ph] = previewSize(o.outScale);
+  // 마법봉을 쓰는 동안은 어디를 누르는지 보이게 원본을 옅게 깐다 (미리보기만, 저장에는 안 들어감)
+  if (state.wand) o.ghost = Math.max(o.ghost, 0.3);
   const res = paint($('preview'), pw, ph, o, src, base);
 
   if (o.kind === 'image') {
@@ -1356,6 +1410,7 @@ function syncControls() {
   $('toneWrap').hidden = colorMode === 'duo';
   $('thrWrap').hidden = maskMode() === 'full';
   $('whiteInnerWrap').hidden = maskMode() !== 'white';
+  syncResets();
   const q = +$('quant').value;
   $('quantOut').value = q > 16 ? '원본' : colorMode === 'mono' ? `${q}단계` : `${q}색`;
   const jpg = $('format').value === 'jpg';
@@ -1471,6 +1526,63 @@ document.querySelectorAll('[name=maskMode]').forEach(el => el.addEventListener('
 // 흰색 제외는 경계값으로 흰색을 먼저 정해야 바탕을 따라갈 수 있으므로, 경계값·안쪽 흰색 설정이 바뀌면 다시 만든다
 $('thr').addEventListener('input', () => { if (maskMode() === 'white') rebuildMask(false); });
 $('whiteInner').addEventListener('change', () => { rebuildMask(false); schedule(); });
+
+// 마법봉: 모양 안을 누르면 빼고, 빠진 곳을 누르면 다시 넣는다
+$('wandBtn').onclick = () => setWand(!state.wand);
+$('preview').addEventListener('click', e => {
+  if (!state.wand || !state.img) return;
+  const c = $('preview');
+  const x = Math.floor(e.offsetX / c.clientWidth * state.mw), y = Math.floor(e.offsetY / c.clientHeight * state.mh);
+  if (x < 0 || y < 0 || x >= state.mw || y >= state.mh) return;
+  const seed = y * state.mw + x;
+  const add = state.mask[seed] < +$('thr').value;
+  state.edits.push({ add, region: wandRegion(seed, +$('wandTol').value) });
+  rebuildMask(false);
+  syncWandButtons();
+  schedule();
+});
+$('wandUndo').onclick = () => { state.edits.pop(); rebuildMask(false); syncWandButtons(); schedule(); };
+$('wandClear').onclick = () => { state.edits = []; rebuildMask(false); syncWandButtons(); schedule(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.wand) setWand(false); });
+
+// ---------- 섹션별 초기화 ----------
+// 배치·색 탭의 섹션마다 '초기화'를 두고, 기본값과 달라진 설정이 있을 때만 보인다.
+// 기본값은 HTML에 적힌 값이고, 그림에 따라 정해지는 값(타일 크기·윤곽 기준·경계값 등)은 그림을 열 때 정한 값이다.
+const RESETTABLE = 'input[type=range], input[type=checkbox], input[type=radio], input[type=color], select';
+const isChanged = el => el.type === 'checkbox' || el.type === 'radio' ? el.checked !== el.defaultChecked
+  : el.tagName === 'SELECT' ? [...el.options].some(op => op.selected !== op.defaultSelected)
+  : el.value !== el.defaultValue;
+document.querySelectorAll('[data-panel=layout] section, [data-panel=color] section').forEach(sec => {
+  const h2 = sec.querySelector(':scope > h2');
+  if (!h2) return;
+  const head = document.createElement('div');
+  head.className = 'sec-head';
+  h2.replaceWith(head);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'tool text';
+  btn.textContent = '초기화';
+  btn.hidden = true;
+  btn.setAttribute('aria-label', `${h2.textContent} 설정 초기화`);
+  head.append(h2, btn);
+  btn.onclick = () => {
+    let mode = false, mask = false;
+    sec.querySelectorAll(RESETTABLE).forEach(el => {
+      if (!isChanged(el)) return;
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = el.defaultChecked;
+      else if (el.tagName === 'SELECT') [...el.options].forEach(op => { op.selected = op.defaultSelected; });
+      else el.value = el.defaultValue;
+      if (el.name === 'maskMode') mode = true;
+      if (el.id === 'thr' || el.id === 'whiteInner') mask = true;
+    });
+    if (mode) rebuildMask(true); else if (mask) rebuildMask(false);
+    schedule();
+  };
+  resetSections.push({ sec, btn });
+});
+function syncResets() {
+  for (const { sec, btn } of resetSections) btn.hidden = ![...sec.querySelectorAll(RESETTABLE)].some(isChanged);
+}
 
 // 서식 도구: 누를 때 편집기 선택이 풀리지 않게
 document.querySelectorAll('.tool[data-cmd], #clearFmt, #clearAllFmt').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
