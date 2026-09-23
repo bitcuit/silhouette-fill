@@ -16,6 +16,7 @@ const state = {
   bgColor: null,           // 투명 없는 그림의 가장자리 색
   opaque: false,
   fonts: [],
+  tiles: [],               // 포토 모자이크 타일 이미지 {bmp, sx, sy, side, avg, name, thumb}
 };
 
 // ---------- 글꼴 ----------
@@ -172,6 +173,10 @@ async function loadFile(file) {
 
   Object.assign(state, { img, mw, mh, rgba, opaque, dpi, zoom: null, name: (file.name || 'image').replace(/\.[^.]+$/, '') });
   $('fs').max = Math.max(8, Math.round(Math.min(mw, mh) / 2));
+  // 타일 크기: 원본 px 기준, 기본은 짧은 변의 1/40
+  const short = Math.min(img.width, img.height);
+  $('tileSize').max = Math.max(8, Math.round(short / 4));
+  $('tileSize').value = Math.max(6, Math.round(short / 40));
   // 투명한 곳이 없으면: 가장자리가 한 색이면 그 배경색을 빼고(로고·일러스트), 아니면 그림 전체를 채운다(사진)
   const border = borderColor(rgba, mw, mh);
   state.bgColor = border.color;
@@ -454,6 +459,14 @@ function hexToHsl(hex) {
   const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
   const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return [Math.round(h * 60), Math.round(s * 100), Math.round(l * 100)];
+}
+
+const hexToRgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
 }
 
 function nearest(palette, r, g, b) {
@@ -811,7 +824,7 @@ function missingChars(src, base, o) {
 function autoFitSize(src, o) {
   let lo = 3, hi = Math.max(4, Math.min(state.mw, state.mh));
   if (layout(src, lo, o).remaining > 0) return lo;
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 16; i++) {
     const mid = (lo + hi) / 2;
     if (layout(src, mid, o).remaining === 0) lo = mid; else hi = mid;
   }
@@ -821,9 +834,10 @@ function autoFitSize(src, o) {
 // 크기를 조금만 키워도 줄이 통째로 하나 빠지기 때문에, 크기만으로는 글이 끝난 뒤 한두 줄이 빈다.
 // 그 남는 자리를 자간을 살짝 넓혀 채운다: 글이 여전히 다 들어가는 가장 넓은 자간.
 function autoFitTracking(src, base, o) {
+  if (layout(src, base, { ...o, tracking: 0 }).remaining > 0) return 0;   // 가장 작은 크기로도 넘치면 자간은 그대로
   let lo = 0, hi = 0.6;
   if (layout(src, base, { ...o, tracking: hi }).remaining === 0) return hi;
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 10; i++) {
     const mid = (lo + hi) / 2;
     if (layout(src, base, { ...o, tracking: mid }).remaining === 0) lo = mid; else hi = mid;
   }
@@ -853,10 +867,16 @@ function readOptions() {
     ghost: +$('ghost').value / 100,
     thr: +$('thr').value,
     outScale: +$('outScale').value,
+    kind: document.querySelector('[name=kind]:checked').value,
+    // 타일 크기는 원본 그림 px로 받고 분석 해상도로 바꿔 쓴다
+    tileSize: state.img ? +$('tileSize').value * state.mw / state.img.width : 20,
+    tileGap: +$('tileGap').value / 100,
+    strength: +$('strength').value / 100,
   };
 }
 
 async function computeLayout(o) {
+  if (o.kind === 'image') return { src: [], base: 0 };
   const src = extractRuns();
   // 반복할 때 글 끝과 처음이 붙지 않게 한 칸 띄운다
   if (o.repeat && src.length) src.push({ ...src[src.length - 1], ch: ' ', underline: false });
@@ -875,58 +895,68 @@ async function computeLayout(o) {
   return { src, base };
 }
 
+// 그림의 한 칸(x0, y0, w, h — 분석 해상도 기준)에 칠할 색 [r, g, b].
+// 칸의 평균색(보이는 픽셀만)을 구한 뒤 색 모드(그림 색·한 색·두 색)와 색 단순화를 적용한다.
+function makeColorer(o) {
+  const { mw, mh, rgba } = state;
+  const palette = o.colorMode === 'image' && o.quant <= 16 ? getPalette(o.quant, o.thr) : null;
+  const dark = hexToRgb(o.duoDark), light = hexToRgb(o.duoLight);
+  return (x0, y0, w, h) => {
+    const sx = Math.max(1, w / 4), sy = Math.max(1, h / 4);
+    let r = 0, g = 0, b = 0, cnt = 0;
+    for (let y = y0; y < y0 + h; y += sy) {
+      for (let x = x0; x < x0 + w; x += sx) {
+        const px = Math.min(mw - 1, Math.max(0, Math.round(x)));
+        const py = Math.min(mh - 1, Math.max(0, Math.round(y)));
+        const p = (py * mw + px) * 4;
+        if (rgba[p + 3] < 128) continue;
+        r += rgba[p]; g += rgba[p + 1]; b += rgba[p + 2]; cnt++;
+      }
+    }
+    if (!cnt) {
+      const p = (Math.min(mh - 1, Math.max(0, Math.round(y0 + h / 2))) * mw + Math.min(mw - 1, Math.max(0, Math.round(x0 + w / 2)))) * 4;
+      r = rgba[p]; g = rgba[p + 1]; b = rgba[p + 2]; cnt = 1;
+    }
+    const c = [r / cnt, g / cnt, b / cnt];
+    const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+    // 두 색: 그 자리가 어두우면 어두운 곳 색, 밝으면 밝은 곳 색
+    if (o.colorMode === 'duo') return lum < o.duoThr ? dark : light;
+    // 한 색: 기준 색의 색상·채도는 두고 명도만 그 자리 밝기로 (가장 어두워도 색이 보이게 18%~90%)
+    if (o.colorMode === 'mono') {
+      const lo = state.lumLo ?? 0, hi = state.lumHi ?? 255;
+      let t = Math.min(1, Math.max(0, (lum - lo) / Math.max(1, hi - lo)));
+      if (o.quant <= 16) t = Math.round(t * (o.quant - 1)) / (o.quant - 1);
+      const [hh, ss] = o.monoHsl;
+      return hslToRgb(hh, ss, 18 + t * 72);
+    }
+    return palette ? nearest(palette, c[0], c[1], c[2]) : c;
+  };
+}
+const cssRgb = c => `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`;
+
 function paint(canvas, outW, outH, o, src, base) {
-  const { img, mw, mh, rgba } = state;
+  const { img, mw } = state;
   canvas.width = outW;
   canvas.height = outH;
   const ctx = canvas.getContext('2d');
   const r = outW / mw;
   let result = { remaining: 0, fillRatio: 0, hasSpace: true };
+  const colorAt = makeColorer(o);
 
-  if (src.length) {
+  if (o.kind === 'image') {
+    result = paintMosaic(ctx, outW, outH, o, colorAt);
+  } else if (src.length) {
     ctx.setTransform(r, 0, 0, r, 0, 0);
     ctx.textBaseline = 'alphabetic';
     ctx.lineJoin = 'round';
     let lastFont = '';
-    const palette = o.colorMode === 'image' && o.quant <= 16 ? getPalette(o.quant, o.thr) : null;
-    // 글자가 차지하는 칸의 평균색 (보이는 픽셀만) — 글자 하나에 한 색
-    const sample = (x0, y0, w, h) => {
-      const sx = Math.max(1, w / 4), sy = Math.max(1, h / 4);
-      let r = 0, g = 0, b = 0, cnt = 0;
-      for (let y = y0; y < y0 + h; y += sy) {
-        for (let x = x0; x < x0 + w; x += sx) {
-          const px = Math.min(mw - 1, Math.max(0, Math.round(x)));
-          const py = Math.min(mh - 1, Math.max(0, Math.round(y)));
-          const p = (py * mw + px) * 4;
-          if (rgba[p + 3] < 128) continue;
-          r += rgba[p]; g += rgba[p + 1]; b += rgba[p + 2]; cnt++;
-        }
-      }
-      if (!cnt) {
-        const p = (Math.min(mh - 1, Math.max(0, Math.round(y0 + h / 2))) * mw + Math.min(mw - 1, Math.max(0, Math.round(x0 + w / 2)))) * 4;
-        r = rgba[p]; g = rgba[p + 1]; b = rgba[p + 2]; cnt = 1;
-      }
-      let c = [r / cnt, g / cnt, b / cnt];
-      // 두 색: 그 자리가 어두우면 어두운 곳 색, 밝으면 밝은 곳 색
-      const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-      if (o.colorMode === 'duo') return lum < o.duoThr ? o.duoDark : o.duoLight;
-      // 한 색: 기준 색의 색상·채도는 두고 명도만 그 자리 밝기로 (가장 어두워도 색이 보이게 18%~90%)
-      if (o.colorMode === 'mono') {
-        const lo = state.lumLo ?? 0, hi = state.lumHi ?? 255;
-        let t = Math.min(1, Math.max(0, (lum - lo) / Math.max(1, hi - lo)));
-        if (o.quant <= 16) t = Math.round(t * (o.quant - 1)) / (o.quant - 1);
-        const [hh, ss] = o.monoHsl;
-        return `hsl(${hh},${ss}%,${(18 + t * 72).toFixed(1)}%)`;
-      }
-      if (palette) c = nearest(palette, c[0], c[1], c[2]);
-      return `rgb(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])})`;
-    };
     result = layout(src, base, o, (line, baseline) => {
       const { items, widths, xs } = line;
       for (let k = 0; k < items.length; k++) {
         const it = items[k], w = widths[k], px = it.scale * base, x = xs[k];
         const f = fontStr(o.family, it.bold, it.italic, px);
-        const color = it.color || sample(x, baseline - px * 0.8, w, px * 0.8);
+        // 글자 하나에 한 색: 글자가 차지하는 칸의 색
+        const color = it.color || cssRgb(colorAt(x, baseline - px * 0.8, w, px * 0.8));
         if (EMOJI.test(it.ch)) {
           drawTintedEmoji(ctx, it.ch, x, baseline, w, px, f, color, o.stroke, r);
         } else {
@@ -947,8 +977,9 @@ function paint(canvas, outW, outH, o, src, base) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
-  // 글이 없을 땐 모양이 보이도록 원본을 옅게 깐다
-  const ghost = src.length ? o.ghost : Math.max(o.ghost, 0.15);
+  // 채울 것이 없을 땐 모양이 보이도록 원본을 옅게 깐다
+  const empty = o.kind === 'image' ? !state.tiles.length : !src.length;
+  const ghost = empty ? Math.max(o.ghost, 0.15) : o.ghost;
   if (ghost > 0) {
     ctx.globalCompositeOperation = 'destination-over';
     ctx.globalAlpha = ghost;
@@ -962,6 +993,123 @@ function paint(canvas, outW, outH, o, src, base) {
   }
   ctx.globalCompositeOperation = 'source-over';
   return result;
+}
+
+// ---------- 포토 모자이크 ----------
+// 모양 안을 정사각형 칸으로 나누고, 칸마다 평균색이 가장 가까운 타일 이미지를 골라
+// 그 칸의 색에 맞게 색을 보정해 넣는다. 칸 전체가 윤곽 안에 들 때만 놓는다(글자와 같은 규칙).
+function paintMosaic(ctx, outW, outH, o, colorAt) {
+  const { mw, mh, tiles } = state;
+  if (!tiles.length) return { hasSpace: true, placed: 0, noTiles: true };
+  const r = outW / mw;
+  const down = getDownRuns(o.thr);
+  const T = o.tileSize, gap = T * o.tileGap, pitch = T + gap;
+  const cols = Math.floor((mw + gap) / pitch), rows = Math.floor((mh + gap) / pitch);
+  const ox = (mw - (cols * pitch - gap)) / 2, oy = (mh - (rows * pitch - gap)) / 2;
+  const scaled = new Map();   // 타일 번호|폭|높이 → 그 크기로 줄인 픽셀
+  const scaledData = (ti, w, h) => {
+    const key = `${ti}|${w}|${h}`;
+    let d = scaled.get(key);
+    if (!d) {
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const cx = c.getContext('2d');
+      const t = tiles[ti];
+      cx.drawImage(t.bmp, t.sx, t.sy, t.side, t.side, 0, 0, w, h);
+      d = cx.getImageData(0, 0, w, h);
+      scaled.set(key, d);
+    }
+    return d;
+  };
+  const above = new Int32Array(cols).fill(-1);
+  let placed = 0;
+  for (let row = 0; row < rows; row++) {
+    let left = -1;
+    for (let col = 0; col < cols; col++) {
+      const x0 = ox + col * pitch, y0 = oy + row * pitch;
+      const cx0 = Math.floor(x0), cx1 = Math.ceil(x0 + T) - 1, cy0 = Math.floor(y0), need = Math.ceil(y0 + T) - cy0;
+      let inside = cx0 >= 0 && cx1 < mw && cy0 >= 0 && cy0 + need <= mh;
+      for (let c = cx0; inside && c <= cx1; c++) if (down[cy0 * mw + c] < need) inside = false;
+      if (!inside) { above[col] = -1; left = -1; continue; }
+
+      const want = colorAt(x0, y0, T, T);
+      // 평균색이 가장 가까운 타일. 바로 왼쪽·위와 같은 타일이면 조금 불리하게 해서 같은 사진이 뭉치지 않게 한다.
+      let best = 0, bd = Infinity;
+      for (let ti = 0; ti < tiles.length; ti++) {
+        const a = tiles[ti].avg;
+        let d = (a[0] - want[0]) ** 2 + (a[1] - want[1]) ** 2 + (a[2] - want[2]) ** 2;
+        if (tiles.length > 2 && (ti === left || ti === above[col])) d += 2500;
+        if (d < bd) { bd = d; best = ti; }
+      }
+      left = above[col] = best;
+
+      const X0 = Math.round(x0 * r), Y0 = Math.round(y0 * r);
+      const w = Math.round((x0 + T) * r) - X0, h = Math.round((y0 + T) * r) - Y0;
+      if (w < 1 || h < 1) continue;
+      const src = scaledData(best, w, h);
+      // 색 보정: 타일의 평균색을 칸의 색 쪽으로 옮긴다 (무늬는 그대로, 강도만큼)
+      const a = tiles[best].avg, k = o.strength;
+      const dr = (want[0] - a[0]) * k, dg = (want[1] - a[1]) * k, db = (want[2] - a[2]) * k;
+      const out = ctx.createImageData(w, h);
+      const s = src.data, d = out.data;
+      for (let p = 0; p < s.length; p += 4) {
+        d[p] = s[p] + dr; d[p + 1] = s[p + 1] + dg; d[p + 2] = s[p + 2] + db; d[p + 3] = s[p + 3];
+      }
+      ctx.putImageData(out, X0, Y0);
+      placed++;
+    }
+  }
+  return { hasSpace: placed > 0, placed };
+}
+
+// 타일 이미지 불러오기: 가운데를 정사각형으로 잘라 쓰고, 평균색을 미리 구해 둔다
+async function addTiles(files) {
+  const list = [...files].filter(f => f.type.startsWith('image/'));
+  if (!list.length) { setStatus('이미지 파일이 아닙니다. 타일로 쓸 그림 파일을 넣어 주세요.', true); return; }
+  let failed = 0;
+  for (const f of list) {
+    let bmp;
+    try { bmp = await createImageBitmap(f); } catch { failed++; continue; }
+    const side = Math.min(bmp.width, bmp.height);
+    const sx = (bmp.width - side) / 2, sy = (bmp.height - side) / 2;
+    const c = document.createElement('canvas');
+    c.width = c.height = 16;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(bmp, sx, sy, side, side, 0, 0, 16, 16);
+    const px = cx.getImageData(0, 0, 16, 16).data;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let p = 0; p < px.length; p += 4) { if (px[p + 3] < 128) continue; r += px[p]; g += px[p + 1]; b += px[p + 2]; n++; }
+    if (!n) n = 1;
+    const t = { bmp, sx, sy, side, avg: [r / n, g / n, b / n], name: f.name };
+    const thumb = document.createElement('canvas');
+    thumb.width = thumb.height = 96;
+    thumb.getContext('2d').drawImage(bmp, sx, sy, side, side, 0, 0, 96, 96);
+    t.thumb = thumb.toDataURL('image/jpeg', 0.8);
+    state.tiles.push(t);
+  }
+  renderTileList();
+  if (failed) setStatus(`${failed}개는 읽지 못했습니다. 다른 파일로 다시 시도하세요.`, true);
+  schedule();
+}
+
+function renderTileList() {
+  const box = $('tileList');
+  box.textContent = '';
+  state.tiles.forEach((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'tile';
+    const im = new Image();
+    im.src = t.thumb;
+    im.alt = t.name;
+    const del = document.createElement('button');
+    del.textContent = '×';
+    del.setAttribute('aria-label', `${t.name} 빼기`);
+    del.onclick = () => { state.tiles.splice(i, 1); renderTileList(); schedule(); };
+    el.append(im, del);
+    box.append(el);
+  });
+  $('tileCount').value = state.tiles.length ? `${state.tiles.length}개` : '';
+  $('clearTiles').hidden = !state.tiles.length;
 }
 
 // 컬러 이모지는 fillStyle을 무시하고 제 색으로 그려진다.
@@ -1023,23 +1171,41 @@ async function render() {
   const o = readOptions();
   const { src, base } = await computeLayout(o);
   if (token !== renderToken) return;
-  if (o.auto) numFor('fs').value = Math.round(base * 10) / 10;
+  if (o.auto && o.kind === 'text') numFor('fs').value = Math.round(base * 10) / 10;
 
   const [pw, ph] = previewSize(o.outScale);
   const res = paint($('preview'), pw, ph, o, src, base);
 
+  if (o.kind === 'image') {
+    if (res.noTiles) setStatus('타일로 쓸 이미지를 추가하세요.');
+    else if (!res.placed) setStatus('타일이 들어갈 자리가 없습니다. 타일 크기를 줄이세요.', true);
+    else setStatus('');
+    return;
+  }
+  // 저장했을 때 글자가 몇 px인지: 너무 작으면 뭉개져 보인다
+  const [ow] = outSize(o.outScale);
+  const glyphPx = base * ow / state.mw;
+  const MIN_PX = 9;
+  const smallWarning = () => {
+    const perScale = base * state.img.width / state.mw;       // 저장 배율 1일 때 글자 px
+    const k = [1, 2, 3, 4, 6, 8].find(s => perScale * s >= MIN_PX && Math.max(state.img.width, state.img.height) * s <= OUT_MAX);
+    return `저장하면 글자가 약 ${glyphPx.toFixed(1)}px로 작아 뭉개집니다. ` + (k ? `저장 크기를 ${k}배로 키우세요.` : '글을 줄이거나 더 큰 그림을 쓰세요.');
+  };
+
   if (!src.length) setStatus('채울 글을 입력하세요.');
+  else if (o.auto && res.remaining > 0) setStatus(`글이 너무 길어 가장 작은 글자로도 ${res.remaining.toLocaleString()}자가 들어가지 않습니다. 글을 줄이거나 더 큰 그림을 쓰세요.`, true);
   else if (!res.hasSpace) setStatus('글자가 들어갈 자리가 없습니다. 기본 글자 크기나 경계값을 낮추세요.', true);
   else if (res.remaining > 0) setStatus(`이 글자 크기로는 ${res.remaining.toLocaleString()}자가 들어가지 않습니다. 크기를 줄이거나 '글 길이에 맞춰 그림 꽉 채우기'를 켜세요.`, true);
   else if (!o.auto && !o.repeat && res.fillRatio < 0.97) {
     const more = missingChars(src, base, o);
     setStatus(`글이 모자라 모양의 ${Math.round(res.fillRatio * 100)}%만 채워졌습니다. 약 ${more.toLocaleString()}자 더 쓰면 꽉 찹니다.`);
   }
+  else if (glyphPx < MIN_PX) setStatus(smallWarning(), true);
   else setStatus('');
 }
 
 let timer = 0;
-function schedule() { clearTimeout(timer); timer = setTimeout(render, 80); }
+function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
 
 // 슬라이더 옆 숫자 칸 (data-for로 짝지은 슬라이더)
 const numFor = id => document.querySelector(`.num[data-for="${id}"]`);
@@ -1076,6 +1242,11 @@ function syncControls() {
   syncNumbers();
   const colorMode = document.querySelector('[name=colorMode]:checked').value;
   $('duoWrap').hidden = colorMode !== 'duo';
+  // 채울 것(글자/이미지)에 따라 해당 설정만 보인다
+  const image = document.querySelector('[name=kind]:checked').value === 'image';
+  document.querySelectorAll('.text-only').forEach(el => { el.hidden = image; });
+  document.querySelectorAll('.image-only').forEach(el => { el.hidden = !image; });
+  $('tileSection').hidden = !image;
   $('bg').hidden = document.querySelector('[name=bgMode]:checked').value !== 'solid';
   const count = editor.textContent.replace(/\s+/g, '').length;
   $('charCount').value = count ? `${count.toLocaleString()}자` : '';
@@ -1153,6 +1324,20 @@ $('file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
 $('save').onclick = save;
 $('fontForm').onsubmit = e => { e.preventDefault(); if ($('fontUrl').value.trim()) addFontFromUrl($('fontUrl').value); };
 $('removeFont').onclick = removeCurrentFont;
+
+// 포토 모자이크 타일
+$('pickTiles').onclick = () => $('tileFile').click();
+$('tileFile').onchange = e => { addTiles(e.target.files); e.target.value = ''; };
+$('clearTiles').onclick = () => { state.tiles = []; renderTileList(); schedule(); };
+const tileSection = $('tileSection');
+tileSection.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); tileSection.classList.add('dragging'); });
+tileSection.addEventListener('dragleave', () => tileSection.classList.remove('dragging'));
+tileSection.addEventListener('drop', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  tileSection.classList.remove('dragging');
+  addTiles(e.dataTransfer.files);
+});
 
 // 탭
 document.querySelectorAll('[role=tab]').forEach(tab => tab.addEventListener('click', () => {

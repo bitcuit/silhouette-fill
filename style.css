@@ -82,6 +82,19 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 .unit { color: var(--muted); font-size: 12px; }
 
 .duo { display: flex; flex-direction: column; gap: 10px; }
+
+/* 타일 이미지 목록 */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.tiles:empty { display: none; }
+.tile { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--hover); }
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile button {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff;
+  font-size: 12px; line-height: 18px; cursor: pointer; opacity: 0; transition: opacity .15s;
+}
+.tile:hover button, .tile button:focus-visible { opacity: 1; }
+#tileSection.dragging { outline: 1px dashed var(--ink); outline-offset: 4px; border-radius: 6px; }
 .swatch-field { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .swatch-field input[type=color] { width: 44px; height: 28px; flex: none; }
 .head.sub output { color: var(--muted); }

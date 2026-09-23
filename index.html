@@ -15,7 +15,7 @@
   <header class="panel-head">
     <h1>실루엣 글채움</h1>
     <nav class="tabs" role="tablist">
-      <button role="tab" aria-selected="true" data-tab="text">글</button>
+      <button role="tab" aria-selected="true" data-tab="text">내용</button>
       <button role="tab" aria-selected="false" data-tab="layout">배치</button>
       <button role="tab" aria-selected="false" data-tab="color">색</button>
     </nav>
@@ -31,7 +31,26 @@
       </section>
 
       <section>
-        <h2>내용</h2>
+        <h2>채울 것</h2>
+        <div class="seg two">
+          <label><input type="radio" name="kind" value="text" checked>글자</label>
+          <label><input type="radio" name="kind" value="image">이미지</label>
+        </div>
+      </section>
+
+      <section id="tileSection" hidden>
+        <h2>타일 이미지</h2>
+        <button class="btn line" id="pickTiles">이미지 추가</button>
+        <div class="tiles" id="tileList"></div>
+        <div class="head sub">
+          <button class="tool text" id="clearTiles" hidden>모두 지우기</button>
+          <output id="tileCount"></output>
+        </div>
+        <input type="file" id="tileFile" accept="image/*" multiple hidden>
+      </section>
+
+      <section class="text-only">
+        <h2>글</h2>
         <div class="toolbar" role="toolbar" aria-label="서식">
           <select id="size" aria-label="선택한 글자 크기">
             <option value="0.5">50%</option>
@@ -57,7 +76,7 @@
         </div>
       </section>
 
-      <section>
+      <section class="text-only">
         <h2>글꼴</h2>
         <div class="row">
           <select id="font" aria-label="글꼴"></select>
@@ -88,7 +107,19 @@
         </div>
       </section>
 
-      <section>
+      <section class="image-only" hidden>
+        <h2>타일</h2>
+        <div class="field">
+          <div class="head"><span class="label">타일 크기</span><span class="num-wrap"><input type="number" class="num" data-for="tileSize" aria-label="타일 크기"><span class="unit">px</span></span></div>
+          <input type="range" id="tileSize" min="4" max="200" step="1" value="20">
+        </div>
+        <div class="field">
+          <div class="head"><span class="label">타일 간격</span><span class="num-wrap"><input type="number" class="num" data-for="tileGap" aria-label="타일 간격"><span class="unit">%</span></span></div>
+          <input type="range" id="tileGap" min="0" max="40" step="1" value="0">
+        </div>
+      </section>
+
+      <section class="text-only">
         <h2>크기</h2>
         <label class="check"><input type="checkbox" id="autoFit" checked>글 길이에 맞춰 그림 꽉 채우기</label>
         <div class="field">
@@ -102,7 +133,7 @@
         </div>
       </section>
 
-      <section>
+      <section class="text-only">
         <h2>줄</h2>
         <div class="field">
           <div class="head"><span class="label">줄 간격</span><span class="num-wrap"><input type="number" class="num" data-for="lh" aria-label="줄 간격"></span></div>
@@ -114,7 +145,7 @@
     <!-- 색 -->
     <div class="tab-panel" data-panel="color" role="tabpanel" hidden>
       <section>
-        <h2>글자</h2>
+        <h2>채움</h2>
         <div class="seg">
           <label><input type="radio" name="colorMode" value="image" checked>그림 색</label>
           <label><input type="radio" name="colorMode" value="mono">한 색</label>
@@ -128,6 +159,10 @@
             <div class="head"><span class="label">나누는 밝기</span><span class="num-wrap"><input type="number" class="num" data-for="duoThr" aria-label="나누는 밝기"></span></div>
             <input type="range" id="duoThr" min="1" max="255" step="1" value="128">
           </div>
+        </div>
+        <div class="field image-only" hidden>
+          <div class="head"><span class="label">색 보정 강도</span><span class="num-wrap"><input type="number" class="num" data-for="strength" aria-label="색 보정 강도"><span class="unit">%</span></span></div>
+          <input type="range" id="strength" min="0" max="100" step="1" value="70">
         </div>
         <div class="field" id="quantWrap">
           <div class="head"><span class="label">색 단순화</span><output id="quantOut"></output></div>
@@ -157,6 +192,8 @@
         <option value="2">2배</option>
         <option value="3">3배</option>
         <option value="4">4배</option>
+        <option value="6">6배</option>
+        <option value="8">8배</option>
       </select>
       <select id="format" aria-label="파일 형식" class="narrow">
         <option value="png">PNG</option>
