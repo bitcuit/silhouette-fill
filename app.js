@@ -19,7 +19,7 @@ const state = {
 };
 
 // ---------- 글꼴 ----------
-const USER_FONTS_KEY = 'silhouette-text.fonts';
+const USER_FONTS_KEY = 'silhouette-fill.fonts';
 
 // 웹폰트 CSS나 글꼴 파일을 문서에 붙인다
 function attachFont(f) {
@@ -1396,7 +1396,7 @@ async function save() {
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${state.name}-글채움.${o.format}`;
+    a.download = `${state.name}-채움.${o.format}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   } catch {
