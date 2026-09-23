@@ -553,6 +553,14 @@ function explicitColor(el) {
   return null;
 }
 
+// 눈에 보이는 한 글자 단위로 나눈다.
+// 조합형(NFD) 한글은 완성형으로 합치고, 피부색·가족 이모지처럼 여러 코드로 된 글자도 쪼개지 않는다.
+const segmenter = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('ko', { granularity: 'grapheme' }) : null;
+function graphemes(text) {
+  const t = text.normalize('NFC');
+  return segmenter ? Array.from(segmenter.segment(t), s => s.segment) : Array.from(t);
+}
+
 // 편집기 내용 → 글자 목록. 줄바꿈과 연속 공백은 공백 하나로 합친다 (그림이 줄 단위로 끊겨 보이지 않게).
 function extractRuns() {
   const base = editorPx();
@@ -569,7 +577,7 @@ function extractRuns() {
         underline: hasUnderline(el),
         color: explicitColor(el),
       };
-      for (const ch of node.data) {
+      for (const ch of graphemes(node.data)) {
         if (/\s/.test(ch)) { pendingSpace = true; continue; }
         if (pendingSpace && out.length) out.push({ ...style, ch: ' ' });
         pendingSpace = false;
