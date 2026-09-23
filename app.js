@@ -914,6 +914,7 @@ function readOptions() {
     // 타일 크기는 원본 그림 px로 받고 분석 해상도로 바꿔 쓴다
     tileSize: state.img ? +$('tileSize').value * state.mw / state.img.width : 20,
     tileGap: +$('tileGap').value / 100,
+    variety: +$('variety').value / 100,
     strength: +$('strength').value / 100,
   };
 }
@@ -1065,6 +1066,7 @@ function paintMosaic(ctx, outW, outH, o, colorAt) {
     return d;
   };
   const above = new Int32Array(cols).fill(-1);
+  const uses = new Int32Array(tiles.length);   // 사진마다 지금까지 쓴 칸 수
   let placed = 0;
   for (let row = 0; row < rows; row++) {
     let left = -1;
@@ -1089,9 +1091,16 @@ function paintMosaic(ctx, outW, outH, o, colorAt) {
         }
         sc /= sm.length / 3 || 1;
         if (tiles.length > 2 && (ti === left || ti === above[col])) sc *= 0.85;
+        // 골고루 쓰기: 평균보다 많이 쓴 사진일수록 점수를 깎아 다른 사진에 기회를 준다
+        if (o.variety > 0 && tiles.length > 1) {
+          const avgUse = placed / tiles.length;
+          const over = Math.max(0, uses[ti] - avgUse) / (avgUse + 1);
+          sc /= 1 + o.variety * 3 * over;
+        }
         if (sc > bs) { bs = sc; best = ti; }
       }
       left = above[col] = best;
+      uses[best]++;
 
       const X0 = Math.round(x0 * r), Y0 = Math.round(y0 * r);
       const w = Math.round((x0 + T) * r) - X0, h = Math.round((y0 + T) * r) - Y0;
@@ -1111,7 +1120,7 @@ function paintMosaic(ctx, outW, outH, o, colorAt) {
       placed++;
     }
   }
-  return { hasSpace: placed > 0, placed };
+  return { hasSpace: placed > 0, placed, uses };
 }
 
 // 칸의 색과 사진 픽셀이 얼마나 가까워야 '같은 색'으로 치는지 (클수록 너그럽게)
