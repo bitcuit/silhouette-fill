@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실루엣 글채움</title>
+<meta name="description" content="그림의 실루엣 모양대로 글을 채워 PNG·JPG로 저장합니다.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="style.css">
+<script src="fonts.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<aside class="panel">
+  <header class="panel-head">
+    <h1>실루엣 글채움</h1>
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="text">글</button>
+      <button role="tab" aria-selected="false" data-tab="layout">배치</button>
+      <button role="tab" aria-selected="false" data-tab="color">색</button>
+    </nav>
+  </header>
+
+  <div class="panel-body">
+    <!-- 글 -->
+    <div class="tab-panel" data-panel="text" role="tabpanel">
+      <section>
+        <h2>그림</h2>
+        <button class="btn line" id="pick">그림 선택</button>
+        <p class="note" id="imgInfo" hidden></p>
+      </section>
+
+      <section>
+        <h2>내용</h2>
+        <div class="toolbar" role="toolbar" aria-label="서식">
+          <select id="size" aria-label="선택한 글자 크기">
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1" selected>100%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+            <option value="3">300%</option>
+            <option value="4">400%</option>
+          </select>
+          <button class="tool" data-cmd="bold" aria-label="굵게" aria-pressed="false"><b>B</b></button>
+          <button class="tool" data-cmd="italic" aria-label="기울임" aria-pressed="false"><i>I</i></button>
+          <button class="tool" data-cmd="underline" aria-label="밑줄" aria-pressed="false"><u>U</u></button>
+          <label class="tool swatch" aria-label="선택한 글자 색"><input type="color" id="spanColor" value="#d23c3c"><span></span></label>
+        </div>
+        <div id="editor" contenteditable="true" spellcheck="false" aria-label="채울 글"></div>
+        <div class="head sub">
+          <div class="clear-row">
+            <button class="tool text" id="clearFmt">선택 서식 지우기</button>
+            <button class="tool text" id="clearAllFmt">모든 서식 지우기</button>
+          </div>
+          <output id="charCount"></output>
+        </div>
+      </section>
+
+      <section>
+        <h2>글꼴</h2>
+        <div class="row">
+          <select id="font" aria-label="글꼴"></select>
+          <button class="tool text" id="removeFont" hidden>삭제</button>
+        </div>
+        <form class="row" id="fontForm">
+          <input type="url" id="fontUrl" placeholder="https://fonts.googleapis.com/css2?family=…" aria-label="웹폰트 주소">
+          <button class="btn line small" type="submit">추가</button>
+        </form>
+      </section>
+    </div>
+
+    <!-- 배치 -->
+    <div class="tab-panel" data-panel="layout" role="tabpanel" hidden>
+      <section>
+        <h2>모양</h2>
+        <div class="field">
+          <span class="label">윤곽 기준</span>
+          <div class="seg">
+            <label><input type="radio" name="maskMode" value="alpha" checked>투명도</label>
+            <label><input type="radio" name="maskMode" value="bg">배경색 제외</label>
+            <label><input type="radio" name="maskMode" value="full">전체</label>
+          </div>
+        </div>
+        <div class="field" id="thrWrap">
+          <div class="head"><span class="label">경계값</span><output id="thrOut"></output></div>
+          <input type="range" id="thr" min="1" max="255" step="1" value="128">
+        </div>
+        <label class="check"><input type="checkbox" id="clip">윤곽 밖으로 나온 획 자르기</label>
+      </section>
+
+      <section>
+        <h2>크기</h2>
+        <label class="check"><input type="checkbox" id="autoFit" checked>글 길이에 맞춰 크기 자동</label>
+        <div class="field">
+          <div class="head"><span class="label">기본 글자 크기</span><output id="fsOut"></output></div>
+          <input type="range" id="fs" min="3" max="200" step="1" value="24" disabled>
+        </div>
+        <label class="check" id="repeatWrap"><input type="checkbox" id="repeat" checked>글이 모자라면 반복</label>
+        <div class="field">
+          <div class="head"><span class="label">획 두께</span><output id="strokeOut"></output></div>
+          <input type="range" id="stroke" min="0" max="12" step="1" value="0">
+        </div>
+      </section>
+
+      <section>
+        <h2>줄</h2>
+        <div class="field">
+          <div class="head"><span class="label">줄 간격</span><output id="lhOut"></output></div>
+          <input type="range" id="lh" min="0.8" max="2" step="0.05" value="1.1">
+        </div>
+      </section>
+    </div>
+
+    <!-- 색 -->
+    <div class="tab-panel" data-panel="color" role="tabpanel" hidden>
+      <section>
+        <h2>글자</h2>
+        <div class="seg two">
+          <label><input type="radio" name="colorMode" value="image" checked>그림 색</label>
+          <label><input type="radio" name="colorMode" value="solid">단색</label>
+        </div>
+        <input type="color" id="color" value="#111111" aria-label="글자 색" hidden>
+        <div class="field" id="quantWrap">
+          <div class="head"><span class="label">색 단순화</span><output id="quantOut"></output></div>
+          <input type="range" id="quant" min="2" max="17" step="1" value="17">
+        </div>
+      </section>
+
+      <section>
+        <h2>배경</h2>
+        <div class="seg two">
+          <label><input type="radio" name="bgMode" value="none" checked>투명</label>
+          <label><input type="radio" name="bgMode" value="solid">단색</label>
+        </div>
+        <input type="color" id="bg" value="#ffffff" aria-label="배경 색" hidden>
+        <div class="field">
+          <div class="head"><span class="label">원본 비치기</span><output id="ghostOut"></output></div>
+          <input type="range" id="ghost" min="0" max="100" step="1" value="0">
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="panel-foot">
+    <div class="row">
+      <select id="outScale" aria-label="저장 크기">
+        <option value="1" selected>원본 크기</option>
+        <option value="2">2배</option>
+        <option value="3">3배</option>
+        <option value="4">4배</option>
+      </select>
+      <select id="format" aria-label="파일 형식" class="narrow">
+        <option value="png">PNG</option>
+        <option value="jpg">JPG</option>
+      </select>
+    </div>
+    <p class="note" id="formatNote" hidden>JPG는 투명 배경이 없어 흰색으로 채워 저장됩니다.</p>
+    <button class="btn" id="save" disabled>PNG 저장</button>
+  </footer>
+
+  <input type="file" id="file" accept="image/*" hidden>
+</aside>
+
+<main id="main">
+  <div id="stage">
+    <div id="drop">
+      <p>그림을 끌어다 놓거나 붙여넣기 (Ctrl+V)</p>
+      <button class="btn line" id="pick2">그림 선택</button>
+    </div>
+    <canvas id="preview" hidden></canvas>
+  </div>
+  <div class="bar">
+    <div id="status" role="status"></div>
+    <div class="zoom" id="zoomBar" hidden>
+      <label class="check"><input type="checkbox" id="whiteView" checked>투명 부분 흰색으로 보기</label>
+      <button class="tool text" id="zoomFit" aria-pressed="true">맞춤</button>
+      <input type="range" id="zoom" min="5" max="400" step="1" value="100" aria-label="확대/축소">
+      <output id="zoomOut"></output>
+    </div>
+  </div>
+</main>
+
+<dialog id="askBg">
+  <form method="dialog">
+    <p class="dialog-title">배경을 투명하게 저장할까요?</p>
+    <p class="note">글자 밖의 흰 부분이 투명해집니다.</p>
+    <div class="dialog-actions">
+      <button class="btn line small" value="cancel">취소</button>
+      <button class="btn line small" value="white">흰 배경으로 저장</button>
+      <button class="btn small" value="transparent" autofocus>투명하게 저장</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>
