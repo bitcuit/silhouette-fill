@@ -723,10 +723,20 @@ function layout(src, base, o, onLine) {
     return -1;
   };
 
-  const fill = (start, h, baseline) => {
+  // 가장자리 줄이기: 제 크기로 윤곽에 걸리는 자리에서 같은 글자를 이 비율들로 줄여 가며 넣어 본다
+  const SHRINK = [0.8, 0.64, 0.5, 0.4];
+  const scanSmall = (baseline, h) => {
+    const f = SHRINK[SHRINK.length - 1];
+    const y0 = Math.floor(baseline - asc * h * f), y1 = Math.ceil(baseline + desc * h * f);
+    if (y0 < 0 || y1 > mh - 1) { inside.fill(0); return; }
+    scan(y0, y1);
+  };
+
+  // ls: 줄 전체 크기 비율 (모양의 위아래 끝처럼 보통 줄이 안 들어가는 곳에서 작은 줄을 만들 때)
+  const fill = (start, h, baseline, ls = 1) => {
     let i = start, maxH = 0, area = 0, empty = 0, placed = 0;
     const items = [], widths = [], xs = [];
-    const minW = Math.min(h, base) * 0.9;
+    const minW = Math.min(h, base * ls) * (o.shrink ? 0.9 * SHRINK[SHRINK.length - 1] : 0.9);
     let x = 0;
     while (x < mw) {
       while (x < mw && !inside[x]) x++;
@@ -741,12 +751,24 @@ function layout(src, base, o, onLine) {
       let cx = a, fresh = true, tries = 0, seg = items.length;
       while (cx < runEnd && tries++ < 5000) {
         if (i >= n) { if (o.repeat) i = 0; else break; }
-        const it = src[i];
-        if (fresh && it.ch === ' ') { i++; continue; }       // 끊긴 자리 첫머리의 공백은 버린다
-        const w = charWidth100(o.family, it.bold, it.italic, it.ch) * it.scale * base / 100;
-        if (cx + w > runEnd + 0.5) break;
-        const hit = blockedAt(it, cx, baseline, w);
-        if (hit >= 0) {
+        const src0 = src[i];
+        if (fresh && src0.ch === ' ') { i++; continue; }     // 끊긴 자리 첫머리의 공백은 버린다
+        const sc = src0.scale * ls;
+        const w0 = charWidth100(o.family, src0.bold, src0.italic, src0.ch) * sc * base / 100;
+        let it = ls === 1 ? src0 : { ...src0, scale: sc }, w = w0;
+        let ok = cx + w0 <= runEnd + 0.5 && blockedAt(it, cx, baseline, w0) < 0;
+        const canShrink = o.shrink && src0.ch !== ' ';
+        if (!ok && canShrink) {
+          for (const f of SHRINK) {
+            const it2 = { ...src0, scale: sc * f }, w2 = w0 * f;
+            if (cx + w2 <= runEnd + 0.5 && blockedAt(it2, cx, baseline, w2) < 0) { it = it2; w = w2; ok = true; break; }
+          }
+        }
+        if (!ok) {
+          const fMin = canShrink ? SHRINK[SHRINK.length - 1] : 1;
+          if (cx + w0 * fMin > runEnd + 0.5) break;          // 가장 작게 해도 구간 끝을 넘는다: 다음 구간으로
+          const hit = blockedAt({ ...src0, scale: sc * fMin }, cx, baseline, w0 * fMin);
+          if (hit < 0) break;
           cx = Math.max(cx + 1, hit + 1);                    // 걸린 열 다음부터 다시
           fresh = true;
           seg = items.length;
@@ -791,10 +813,21 @@ function layout(src, base, o, onLine) {
       b = band(y, h);
       if (b.y1 > mh - 1) { res = null; break; }           // 그림 아래 끝
       if (b.y0 < 0) { res = { i: idx, maxH: 0, area: 0, empty: 0, placed: 0, line: null }; break; }
-      scan(b.y0, b.y1);
+      // 가장자리 줄이기를 켜면 가장 작게 줄인 글자가 들어가는 곳까지 후보로 본다 (들어가면 제 크기부터 시도)
+      if (o.shrink) scanSmall(b.baseline, h); else scan(b.y0, b.y1);
       res = fill(idx, h, b.baseline);
       if (res.maxH <= h + 0.01 || iter === 3) break;
       h = res.maxH;
+    }
+    // 보통 줄이 안 들어가는 곳(모양의 위아래 끝, 그림 아래 끝)은 작은 줄로 채워 본다
+    if (o.shrink && !(idx >= n && !o.repeat) && (!res || res.placed === 0)) {
+      for (const ls of [0.7, 0.5]) {
+        const b2 = band(y, h * ls);
+        if (b2.y1 > mh - 1 || b2.y0 < 0) continue;
+        scanSmall(b2.baseline, h * ls);
+        const r2 = fill(idx, h * ls, b2.baseline, ls);
+        if (r2.placed > 0) { res = r2; b = b2; break; }
+      }
     }
     if (!res) break;
     totalArea += res.area;
@@ -803,7 +836,7 @@ function layout(src, base, o, onLine) {
     idx = res.i;
     if (onLine && res.line && res.line.items.length) onLine(res.line, b.baseline);
     // 글자가 들어갈 자리가 없는 줄은 조금씩만 내려가서, 모양이 시작되는 곳에서 바로 첫 줄이 시작되게 한다
-    y += res.area > 0 ? b.pitch : Math.max(1, h * 0.1);
+    y += res.area > 0 || res.placed > 0 ? b.pitch : Math.max(1, h * 0.1);
   }
   return {
     remaining: o.repeat ? 0 : src.slice(idx).reduce((c, s) => c + (s.ch === ' ' ? 0 : 1), 0),  // 못 놓은 글자 수 (공백 제외)
@@ -853,6 +886,7 @@ function readOptions() {
     fs: +$('fs').value,
     repeat: !auto && $('repeat').checked,
     lh: +$('lh').value,
+    shrink: $('shrink').checked,
     colorMode: document.querySelector('[name=colorMode]:checked').value,
     duoDark: $('duoDark').value,
     duoLight: $('duoLight').value,
