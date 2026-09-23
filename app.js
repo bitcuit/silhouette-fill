@@ -13,7 +13,6 @@ const state = {
   rgba: null,              // 분석 해상도 원본 픽셀
   mask: null,              // 0~255, 경계값 이상이면 모양 안쪽
   down: null, downKey: '',  // 열마다 아래로 이어지는 모양 안쪽 길이 (getDownRuns)
-  bgColor: null,           // 투명 없는 그림의 가장자리 색
   opaque: false,
   fonts: [],
   tiles: [],               // 포토 모자이크 타일 이미지 {bmp, sx, sy, side, avg, name, thumb}
@@ -177,15 +176,14 @@ async function loadFile(file) {
   const short = Math.min(img.width, img.height);
   $('tileSize').max = Math.max(8, Math.round(short / 4));
   $('tileSize').value = Math.max(6, Math.round(short / 40));
-  // 투명한 곳이 없으면: 가장자리가 한 색이면 그 배경색을 빼고(로고·일러스트), 아니면 그림 전체를 채운다(사진)
-  const border = borderColor(rgba, mw, mh);
-  state.bgColor = border.color;
-  const mode = !opaque ? 'alpha' : border.uniform ? 'bg' : 'full';
+  // 투명한 곳이 없는 그림은 기본으로 흰색을 빼고 나머지를 모양으로 쓴다
+  const mode = opaque ? 'white' : 'alpha';
   document.querySelector(`[name=maskMode][value=${mode}]`).checked = true;
   rebuildMask(true);
 
-  // 저장 형식은 원본을 따르고, 저장 크기에 실제 픽셀 수를 적는다
-  $('format').value = file.type === 'image/jpeg' ? 'jpg' : 'png';
+  // 저장 형식은 투명을 담을 수 있는 PNG가 기본 (흰색 제외로 바탕을 뺀 그림도 투명하게 저장되도록).
+  // 저장 크기에는 실제 픽셀 수를 적는다
+  $('format').value = 'png';
   for (const opt of $('outScale').options) {
     const [w, h] = outSize(+opt.value);
     opt.textContent = `${+opt.value === 1 ? '원본 크기' : `${opt.value}배`} · ${w}×${h}`;
@@ -320,42 +318,26 @@ function setZoom(z) {
 
 function maskMode() { return document.querySelector('[name=maskMode]:checked').value; }
 
-// 가장자리 픽셀의 중앙값 색과, 가장자리가 거의 그 한 색인지
-function borderColor(rgba, mw, mh) {
-  const rs = [], gs = [], bs = [];
-  const add = (x, y) => { const p = (y * mw + x) * 4; rs.push(rgba[p]); gs.push(rgba[p + 1]); bs.push(rgba[p + 2]); };
-  const step = Math.max(1, Math.floor((mw + mh) / 800));
-  for (let x = 0; x < mw; x += step) { add(x, 0); add(x, mh - 1); }
-  for (let y = 0; y < mh; y += step) { add(0, y); add(mw - 1, y); }
-  const med = a => a.slice().sort((p, q) => p - q)[a.length >> 1];
-  const color = [med(rs), med(gs), med(bs)];
-  let near = 0;
-  for (let i = 0; i < rs.length; i++) {
-    if ((rs[i] - color[0]) ** 2 + (gs[i] - color[1]) ** 2 + (bs[i] - color[2]) ** 2 < 40 * 40) near++;
-  }
-  return { color, uniform: near / rs.length >= 0.85 };
-}
-
 function rebuildMask(resetThreshold) {
   const { rgba, mw, mh } = state;
   if (!rgba) return;
   const mode = maskMode();
   const m = new Uint8Array(mw * mh);
-  const bg = state.bgColor || [255, 255, 255];
   for (let i = 0, p = 0; i < m.length; i++, p += 4) {
     const a = rgba[p + 3];
     if (mode === 'full') { m[i] = 255; continue; }
     if (mode === 'alpha') { m[i] = a; continue; }
-    // 배경색 제외: 배경색에서 얼마나 먼 색인지
+    // 흰색 제외: 흰색에서 얼마나 먼 색인지 (투명한 곳도 뺀다)
     if (a < 128) { m[i] = 0; continue; }
-    const d = Math.sqrt((rgba[p] - bg[0]) ** 2 + (rgba[p + 1] - bg[1]) ** 2 + (rgba[p + 2] - bg[2]) ** 2);
+    const d = Math.sqrt((255 - rgba[p]) ** 2 + (255 - rgba[p + 1]) ** 2 + (255 - rgba[p + 2]) ** 2);
     m[i] = Math.min(255, Math.round(d));
   }
   state.mask = m;
   state.downKey = '';
   state.paletteKey = '';
   if (resetThreshold) {
-    $('thr').value = mode === 'bg' ? Math.min(200, Math.max(24, otsu(m))) : 128;
+    // 흰색 제외의 기본 경계값 40: JPG 압축 등으로 생긴 거의 흰 색까지 흰색으로 본다
+    $('thr').value = mode === 'white' ? 40 : 128;
     // '두 색'의 나누는 밝기: 모양 안쪽 밝기를 두 무리로 가장 잘 가르는 값
     const thr = +$('thr').value, lum = [];
     for (let i = 0, p = 0; i < m.length; i++, p += 4) {
@@ -1294,7 +1276,11 @@ function syncControls() {
   const jpg = $('format').value === 'jpg';
   $('save').textContent = jpg ? 'JPG 저장' : 'PNG 저장';
   $('formatNote').hidden = !(jpg && document.querySelector('[name=bgMode]:checked').value === 'none');
-  $('preview').classList.toggle('white', $('whiteView').checked);
+  // 투명한 부분이 없을 때(JPG 저장·단색 배경)는 흰색 보기가 아무 효과가 없으므로 잠근다
+  const noTransparency = jpg || document.querySelector('[name=bgMode]:checked').value === 'solid';
+  $('whiteView').disabled = noTransparency;
+  $('whiteView').closest('label').classList.toggle('disabled', noTransparency);
+  $('preview').classList.toggle('white', $('whiteView').checked && !noTransparency);
 }
 
 function setStatus(msg, warn = false) {
