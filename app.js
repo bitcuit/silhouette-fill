@@ -1615,12 +1615,13 @@ $('whiteInner').addEventListener('change', () => { rebuildMask(false); schedule(
 // 마법봉: 모양 안을 누르면 빼고, 빠진 곳을 누르면 다시 넣는다
 $('wandBtn').onclick = () => setWand(!state.wand);
 // ? 도움말: 마우스를 올리면 보이고, 누르면 열어 둔다(터치용). 바깥을 누르면 닫는다
-$('wandHelp').onclick = e => {
+document.querySelectorAll('.help').forEach(b => b.addEventListener('click', e => {
   e.stopPropagation();
-  const b = $('wandHelp');
-  b.setAttribute('aria-expanded', String(b.getAttribute('aria-expanded') !== 'true'));
-};
-document.addEventListener('click', () => $('wandHelp').setAttribute('aria-expanded', 'false'));
+  const open = b.getAttribute('aria-expanded') !== 'true';
+  document.querySelectorAll('.help').forEach(o => o.setAttribute('aria-expanded', 'false'));
+  b.setAttribute('aria-expanded', String(open));
+}));
+document.addEventListener('click', () => document.querySelectorAll('.help').forEach(o => o.setAttribute('aria-expanded', 'false')));
 $('preview').addEventListener('click', e => {
   if (!state.wand || !state.img) return;
   const c = $('preview');

@@ -1,15 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="스프링클">
-  <!-- 하트 모양 안을 스프링클(작은 색 조각)이 채운 모습 -->
-  <path d="M32 56C13 43 4.5 31.5 7.5 21 10.5 10.5 25.5 7.5 32 18.5 38.5 7.5 53.5 10.5 56.5 21 59.5 31.5 51 43 32 56Z" fill="#FF4D2E"/>
-  <g>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFFFFF" transform="translate(19 21) rotate(-35)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFD166" transform="translate(30 25) rotate(40)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFFFFF" transform="translate(43 20) rotate(-60)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#2B2320" transform="translate(48 30) rotate(20)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#2B2320" transform="translate(15 30) rotate(15)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFD166" transform="translate(24 36) rotate(75)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFFFFF" transform="translate(37 35) rotate(-20)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFD166" transform="translate(42 41) rotate(55)"/>
-    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#2B2320" transform="translate(30 45) rotate(-50)"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 13 11" shape-rendering="crispEdges" role="img" aria-label="스프링클">
+  <!-- 픽셀 하트 안에 스프링클 조각: 작은 조각이 모여 그림이 되는 모자이크 느낌 -->
+  <path fill="#FF4D2E" d="M2 0h3v1h-3zM8 0h3v1h-3zM1 1h5v1h-5zM7 1h5v1h-5zM0 2h2v1h-2zM3 2h6v1h-6zM10 2h3v1h-3zM0 3h2v1h-2zM3 3h2v1h-2zM7 3h3v1h-3zM11 3h2v1h-2zM0 4h1v1h-1zM2 4h9v1h-9zM12 4h1v1h-1zM1 5h3v1h-3zM5 5h2v1h-2zM9 5h3v1h-3zM2 6h2v1h-2zM5 6h6v1h-6zM3 7h3v1h-3zM8 7h2v1h-2zM4 8h5v1h-5zM5 9h3v1h-3zM6 10h1v1h-1z"/><path fill="#FFFFFF" d="M2 2h1v1h-1zM2 3h1v1h-1zM11 4h1v1h-1zM7 5h2v1h-2z"/><path fill="#FFD166" d="M5 3h2v1h-2zM4 5h1v1h-1zM4 6h1v1h-1z"/><path fill="#2B2320" d="M9 2h1v1h-1zM10 3h1v1h-1zM1 4h1v1h-1zM6 7h2v1h-2z"/>
 </svg>

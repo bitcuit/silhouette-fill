@@ -56,9 +56,14 @@ body {
   border-right: 1px solid var(--line);
 }
 .panel-head { padding: 26px 24px 0; border-bottom: 1px solid var(--line); }
-h1 { display: flex; align-items: center; gap: 8px; font: 800 22px/1.2 "Pretendard Variable", Pretendard, sans-serif; letter-spacing: -0.045em; margin: 0 0 18px; }
-h1 img { flex: none; }
-h1 span::after { content: "."; color: var(--accent); }
+/* 제목: 픽셀 하트 + 모나 Bold 워드마크(SVG) */
+h1.brand { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-size: 0; color: var(--ink); }
+h1.brand img, .wordmark { flex: none; image-rendering: pixelated; }
+.wordmark .dot { fill: var(--accent); }
+.help-wrap.brand-help { position: static; margin-left: 2px; font-size: 13px; }
+h1.brand { position: relative; }
+h1.brand .tip.below { left: 0; right: 0; width: auto; }
+h1.brand .tip.below::after { left: 151px; }
 .tabs {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; margin-bottom: 16px;
   background: var(--hover); border-radius: 999px;
@@ -111,10 +116,13 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 .tip {
   position: absolute; right: -4px; bottom: calc(100% + 8px); z-index: 5; width: 220px;
   padding: 9px 11px; border-radius: 8px; background: var(--ink); color: var(--panel);
-  font-size: 12px; line-height: 1.5; box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.35);
+  font-size: 12px; line-height: 1.55; word-break: keep-all; box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.35);
   opacity: 0; visibility: hidden; transform: translateY(2px); transition: opacity .12s, transform .12s, visibility .12s;
 }
 .tip::after { content: ""; position: absolute; right: 10px; top: 100%; border: 5px solid transparent; border-top-color: var(--ink); }
+/* 아래로 여는 말풍선 (화면 위쪽에 있는 ?용) */
+.tip.below { top: calc(100% + 8px); bottom: auto; left: -10px; right: auto; width: 240px; transform: translateY(-2px); }
+.tip.below::after { top: auto; bottom: 100%; left: 14px; right: auto; border-top-color: transparent; border-bottom-color: var(--ink); }
 .help:hover + .tip, .help:focus-visible + .tip, .help[aria-expanded="true"] + .tip { opacity: 1; visibility: visible; transform: none; }
 .btn.line[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 #save { height: 42px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
