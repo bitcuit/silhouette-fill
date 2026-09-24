@@ -56,8 +56,9 @@ body {
   border-right: 1px solid var(--line);
 }
 .panel-head { padding: 26px 24px 0; border-bottom: 1px solid var(--line); }
-h1 { font: 700 21px/1.2 "Noto Serif KR", serif; letter-spacing: -0.03em; margin: 0 0 18px; }
-h1::after { content: "."; color: var(--accent); }
+h1 { display: flex; align-items: center; gap: 8px; font: 700 21px/1.2 "Noto Serif KR", serif; letter-spacing: -0.03em; margin: 0 0 18px; }
+h1 img { flex: none; }
+h1 span::after { content: "."; color: var(--accent); }
 .tabs {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; margin-bottom: 16px;
   background: var(--hover); border-radius: 999px;
@@ -98,7 +99,23 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 .duo { display: flex; flex-direction: column; gap: 10px; }
 .tone { display: flex; flex-direction: column; gap: 14px; }
 .sec-head { display: flex; justify-content: space-between; align-items: center; min-height: 18px; margin-bottom: -4px; }
-.sec-head .tool.text { height: 22px; margin-right: -6px; }
+.sec-head .reset { height: 24px; width: 24px; min-width: 24px; padding: 0; margin-right: -4px; color: var(--muted); }
+.sec-head .reset:hover { color: var(--accent); }
+/* ? 도움말: 마우스를 올리거나 누르면 말풍선 */
+.help-wrap { position: relative; margin-left: auto; }
+.help {
+  width: 20px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 50%;
+  background: var(--panel); color: var(--muted); font: 600 11px/1 inherit; cursor: help;
+}
+.help:hover, .help[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.tip {
+  position: absolute; right: -4px; bottom: calc(100% + 8px); z-index: 5; width: 220px;
+  padding: 9px 11px; border-radius: 8px; background: var(--ink); color: var(--panel);
+  font-size: 12px; line-height: 1.5; box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.35);
+  opacity: 0; visibility: hidden; transform: translateY(2px); transition: opacity .12s, transform .12s, visibility .12s;
+}
+.tip::after { content: ""; position: absolute; right: 10px; top: 100%; border: 5px solid transparent; border-top-color: var(--ink); }
+.help:hover + .tip, .help:focus-visible + .tip, .help[aria-expanded="true"] + .tip { opacity: 1; visibility: visible; transform: none; }
 .btn.line[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 #save { height: 42px; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 #save:hover:not(:disabled) { filter: brightness(1.05); }
@@ -117,7 +134,7 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 .tile:hover button, .tile button:focus-visible { opacity: 1; }
 .dropzone {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 18px 12px; border: 1px dashed var(--line); border-radius: 8px;
+  justify-content: center; min-height: 150px; padding: 28px 12px; border: 1px dashed var(--line); border-radius: 10px;
   color: var(--muted); text-align: center; transition: border-color .15s, background .15s;
 }
 .dropzone p { margin: 0; }
@@ -281,7 +298,7 @@ dialog form { display: flex; flex-direction: column; gap: 8px; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .tab-panel:not([hidden]) { animation: fade .15s ease-out; }
-.sec-head .tool.text:not([hidden]) { animation: fade .15s ease-out; }
+.sec-head .reset:not([hidden]) { animation: fade .15s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

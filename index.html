@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>실루엣 채움</title>
-<meta name="description" content="그림의 실루엣 모양대로 글자나 이미지를 채워 PNG·JPG로 저장합니다.">
+<title>스프링클</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<meta name="description" content="그림 모양 안을 글자나 작은 사진으로 채우고, 조각마다 그 자리의 그림 색을 입혀 PNG·JPG로 저장합니다.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="style.css">
 <script src="fonts.js"></script>
@@ -13,7 +14,7 @@
 <body>
 <aside class="panel">
   <header class="panel-head">
-    <h1>실루엣 채움</h1>
+    <h1><img src="logo.svg" alt="" width="26" height="26"><span>스프링클</span></h1>
     <nav class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="text">내용</button>
       <button role="tab" aria-selected="false" data-tab="layout">배치</button>
@@ -114,8 +115,11 @@
             <button class="btn line small" id="wandBtn" type="button" aria-pressed="false">마법봉</button>
             <button class="tool text" id="wandUndo" type="button" hidden>되돌리기</button>
             <button class="tool text" id="wandClear" type="button" hidden>모두 지우기</button>
+            <span class="help-wrap">
+              <button class="help" id="wandHelp" type="button" aria-label="마법봉 사용법" aria-expanded="false" aria-describedby="wandTip">?</button>
+              <span class="tip" id="wandTip" role="tooltip">미리보기에서 빼거나 다시 넣을 곳을 누르세요. 비슷한 색으로 이어진 영역이 함께 바뀝니다.</span>
+            </span>
           </div>
-          <p class="note" id="wandNote" hidden>미리보기에서 빼거나 다시 넣을 곳을 누르세요. 비슷한 색으로 이어진 영역이 함께 바뀝니다.</p>
           <div class="head"><span class="label">마법봉 허용 범위</span><span class="num-wrap"><input type="number" class="num" data-for="wandTol" aria-label="마법봉 허용 범위"></span></div>
           <input type="range" id="wandTol" min="1" max="150" step="1" value="32">
         </div>
@@ -167,8 +171,8 @@
         <h2>채움</h2>
         <div class="seg swatches">
           <label><input type="radio" name="colorMode" value="image" checked>그림 색<span class="sw" id="swImage"></span></label>
-          <label><input type="radio" name="colorMode" value="mono">한 색<span class="sw" id="swMono"></span></label>
-          <label><input type="radio" name="colorMode" value="duo">두 색<span class="sw" id="swDuo"></span></label>
+          <label><input type="radio" name="colorMode" value="mono">원톤<span class="sw" id="swMono"></span></label>
+          <label><input type="radio" name="colorMode" value="duo">투톤<span class="sw" id="swDuo"></span></label>
         </div>
         <label class="swatch-field" id="monoWrap" hidden><input type="color" id="monoColor" value="#2b59c3">기준 색</label>
         <div id="duoWrap" class="duo" hidden>

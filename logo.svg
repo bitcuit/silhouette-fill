@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="스프링클">
+  <!-- 하트 모양 안을 스프링클(작은 색 조각)이 채운 모습 -->
+  <path d="M32 56C13 43 4.5 31.5 7.5 21 10.5 10.5 25.5 7.5 32 18.5 38.5 7.5 53.5 10.5 56.5 21 59.5 31.5 51 43 32 56Z" fill="#FF4D2E"/>
+  <g>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFFFFF" transform="translate(19 21) rotate(-35)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFD166" transform="translate(30 25) rotate(40)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFFFFF" transform="translate(43 20) rotate(-60)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#2B2320" transform="translate(48 30) rotate(20)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#2B2320" transform="translate(15 30) rotate(15)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFD166" transform="translate(24 36) rotate(75)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFFFFF" transform="translate(37 35) rotate(-20)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#FFD166" transform="translate(42 41) rotate(55)"/>
+    <rect x="-1.7" y="-4.6" width="3.4" height="9.2" rx="1.7" fill="#2B2320" transform="translate(30 45) rotate(-50)"/>
+  </g>
+</svg>

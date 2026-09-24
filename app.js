@@ -23,7 +23,7 @@ const state = {
 };
 
 // ---------- 글꼴 ----------
-const USER_FONTS_KEY = 'silhouette-fill.fonts';
+const USER_FONTS_KEY = 'sprinkle.fonts';
 
 // 웹폰트 CSS나 글꼴 파일을 문서에 붙인다
 function attachFont(f) {
@@ -351,13 +351,13 @@ function rebuildMask(resetThreshold) {
   state.downKey = '';
   state.paletteKey = '';
   if (resetThreshold) {
-    // '두 색'의 나누는 밝기: 모양 안쪽 밝기를 두 무리로 가장 잘 가르는 값
+    // '투톤'의 나누는 밝기: 모양 안쪽 밝기를 두 무리로 가장 잘 가르는 값
     const thr = +$('thr').value, lum = [];
     for (let i = 0, p = 0; i < m.length; i++, p += 4) {
       if (m[i] >= thr) lum.push(Math.round(0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]));
     }
     if (lum.length) $('duoThr').value = $('duoThr').defaultValue = otsu(lum);
-    // '한 색'에서 명도를 펼칠 범위: 모양 안쪽 밝기의 하위·상위 2% (흐린 사진도 명도 차이가 또렷하게)
+    // '원톤'에서 명도를 펼칠 범위: 모양 안쪽 밝기의 하위·상위 2% (흐린 사진도 명도 차이가 또렷하게)
     if (lum.length) {
       lum.sort((p, q) => p - q);
       state.lumLo = lum[Math.floor(lum.length * 0.02)];
@@ -397,7 +397,6 @@ function wandRegion(seed, tol) {
 function setWand(on) {
   state.wand = on;
   $('wandBtn').setAttribute('aria-pressed', String(on));
-  $('wandNote').hidden = !on;
   $('preview').classList.toggle('wand', on);
   schedule();
 }
@@ -1001,7 +1000,7 @@ async function computeLayout(o) {
 }
 
 // 그림의 한 칸(x0, y0, w, h — 분석 해상도 기준)에 칠할 색 [r, g, b].
-// 칸의 평균색(보이는 픽셀만)을 구한 뒤 색 모드(그림 색·한 색·두 색)와 색 단순화를 적용한다.
+// 칸의 평균색(보이는 픽셀만)을 구한 뒤 색 모드(그림 색·원톤·투톤)와 색 단순화를 적용한다.
 function makeColorer(o) {
   const { mw, mh, rgba } = state;
   const palette = o.colorMode === 'image' && o.quant <= 16 ? getPalette(o.quant, o.thr) : null;
@@ -1024,9 +1023,9 @@ function makeColorer(o) {
     }
     const c = [r / cnt, g / cnt, b / cnt];
     const lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-    // 두 색: 그 자리가 어두우면 어두운 곳 색, 밝으면 밝은 곳 색
+    // 투톤: 그 자리가 어두우면 어두운 곳 색, 밝으면 밝은 곳 색
     if (o.colorMode === 'duo') return lum < o.duoThr ? dark : light;
-    // 한 색: 기준 색의 색상·채도는 두고 명도만 그 자리 밝기로 (가장 어두워도 색이 보이게 18%~90%)
+    // 원톤: 기준 색의 색상·채도는 두고 명도만 그 자리 밝기로 (가장 어두워도 색이 보이게 18%~90%)
     if (o.colorMode === 'mono') {
       const lo = state.lumLo ?? 0, hi = state.lumHi ?? 255;
       let t = Math.min(1, Math.max(0, (lum - lo) / Math.max(1, hi - lo)));
@@ -1037,7 +1036,7 @@ function makeColorer(o) {
     return adjustTone(palette ? nearest(palette, c[0], c[1], c[2]) : c, o);
   };
 }
-// 명도 조정 (그림 색·한 색): 대비 → 밝기 → 최대 밝기 순서.
+// 명도 조정 (그림 색·원톤): 대비 → 밝기 → 최대 밝기 순서.
 // 최대 밝기는 색 비율을 두고 밝기만 낮춰, 흰색은 연회색이 되고 연한 색은 같은 색의 진한 쪽으로 간다.
 function adjustTone(c, o) {
   const k = 1 + o.contrast, add = o.bright * 255;
@@ -1491,7 +1490,7 @@ async function save() {
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${state.name}-채움.${o.format}`;
+    a.download = `${state.name}-sprinkle.${o.format}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   } catch {
@@ -1555,6 +1554,13 @@ $('whiteInner').addEventListener('change', () => { rebuildMask(false); schedule(
 
 // 마법봉: 모양 안을 누르면 빼고, 빠진 곳을 누르면 다시 넣는다
 $('wandBtn').onclick = () => setWand(!state.wand);
+// ? 도움말: 마우스를 올리면 보이고, 누르면 열어 둔다(터치용). 바깥을 누르면 닫는다
+$('wandHelp').onclick = e => {
+  e.stopPropagation();
+  const b = $('wandHelp');
+  b.setAttribute('aria-expanded', String(b.getAttribute('aria-expanded') !== 'true'));
+};
+document.addEventListener('click', () => $('wandHelp').setAttribute('aria-expanded', 'false'));
 $('preview').addEventListener('click', e => {
   if (!state.wand || !state.img) return;
   const c = $('preview');
@@ -1586,9 +1592,10 @@ document.querySelectorAll('[data-panel=layout] section, [data-panel=color] secti
   h2.replaceWith(head);
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'tool text';
-  btn.textContent = '초기화';
+  btn.className = 'tool reset';
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.4-3.4"/><path d="M3.2 2.6v2.6h2.6"/></svg>';
   btn.hidden = true;
+  btn.title = '초기화';
   btn.setAttribute('aria-label', `${h2.textContent} 설정 초기화`);
   head.append(h2, btn);
   btn.onclick = () => {
