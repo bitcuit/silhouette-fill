@@ -54,7 +54,11 @@
       </section>
 
       <section class="text-only">
-        <h2>글</h2>
+        <div class="sec-head">
+          <h2>글</h2>
+          <button class="tool reset" id="expandEditor" type="button" title="크게 보기" aria-label="글 크게 보기"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2.5h4v4"/><path d="M13.5 2.5 9 7"/><path d="M6.5 13.5h-4v-4"/><path d="M2.5 13.5 7 9"/></svg></button>
+        </div>
+        <div id="editorBox">
         <div class="toolbar" role="toolbar" aria-label="서식">
           <select id="size" aria-label="선택한 글자 크기">
             <option value="0.5">50%</option>
@@ -69,6 +73,17 @@
           <button class="tool" data-cmd="italic" aria-label="기울임" aria-pressed="false"><i>I</i></button>
           <button class="tool" data-cmd="underline" aria-label="밑줄" aria-pressed="false"><u>U</u></button>
           <label class="tool swatch" aria-label="선택한 글자 색"><input type="color" id="spanColor" value="#d23c3c"><span></span></label>
+          <span class="tool-divider" aria-hidden="true"></span>
+          <button class="tool fontbtn" id="fontBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="fontPop">Aa<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="popover" id="fontPop" role="dialog" aria-label="글꼴" hidden>
+            <p class="pop-title">글꼴<span>글 전체에 적용</span></p>
+            <div class="font-list" id="fontList"></div>
+            <form class="row" id="fontForm">
+              <input type="url" id="fontUrl" placeholder="https://fonts.googleapis.com/css2?family=…" aria-label="웹폰트 주소">
+              <button class="btn line small" type="submit">추가</button>
+            </form>
+          </div>
+          <select id="font" aria-label="글꼴" hidden></select>
         </div>
         <div id="editor" contenteditable="true" spellcheck="false" aria-label="채울 글"></div>
         <div class="head sub">
@@ -78,18 +93,7 @@
           </div>
           <output id="charCount"></output>
         </div>
-      </section>
-
-      <section class="text-only">
-        <h2>글꼴</h2>
-        <div class="row">
-          <select id="font" aria-label="글꼴"></select>
-          <button class="tool text" id="removeFont" hidden>삭제</button>
         </div>
-        <form class="row" id="fontForm">
-          <input type="url" id="fontUrl" placeholder="https://fonts.googleapis.com/css2?family=…" aria-label="웹폰트 주소">
-          <button class="btn line small" type="submit">추가</button>
-        </form>
       </section>
     </div>
 
@@ -261,6 +265,14 @@
     <span class="num-wrap"><input type="number" class="num" data-for="zoom" aria-label="확대/축소"><span class="unit">%</span></span>
   </div>
 </main>
+
+<dialog id="editorDialog" class="editor-dialog" aria-label="글 크게 보기">
+  <div class="dlg-head">
+    <p class="dialog-title">글</p>
+    <button class="tool" id="closeEditor" type="button" aria-label="닫기">×</button>
+  </div>
+  <div id="editorSlot"></div>
+</dialog>
 
 <dialog id="askBg">
   <form method="dialog">

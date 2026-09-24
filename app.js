@@ -49,8 +49,50 @@ function addFontOption(f) {
   state.fonts.push(f);
   const opt = new Option(f.name || f.family, String(state.fonts.length - 1));
   $('font').add(opt);
+  renderFontList();
   return opt;
 }
+
+// 글꼴 팝오버의 목록: 이름을 그 글꼴로 보여 주고, 직접 추가한 글꼴은 × 로 지운다
+function renderFontList() {
+  const list = $('fontList');
+  list.textContent = '';
+  for (const opt of $('font').options) {
+    const f = state.fonts[+opt.value];
+    if (!f) continue;
+    const item = document.createElement('div');
+    item.className = 'font-item';
+    item.setAttribute('role', 'option');
+    item.tabIndex = 0;
+    item.setAttribute('aria-selected', String(opt.value === $('font').value));
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = opt.textContent;
+    name.style.fontFamily = `"${f.family}", "Malgun Gothic", sans-serif`;
+    item.append(name);
+    const choose = () => {
+      $('font').value = opt.value;
+      $('font').dispatchEvent(new Event('input', { bubbles: true }));
+      renderFontList();
+      closeFontPop();
+    };
+    item.onclick = choose;
+    item.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } };
+    if (f.user) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'del';
+      del.textContent = '×';
+      del.setAttribute('aria-label', `${opt.textContent} 지우기`);
+      del.onclick = e => { e.stopPropagation(); $('font').value = opt.value; removeCurrentFont(); };
+      item.append(del);
+    }
+    list.append(item);
+  }
+}
+
+function openFontPop() { $('fontPop').hidden = false; $('fontBtn').setAttribute('aria-expanded', 'true'); renderFontList(); }
+function closeFontPop() { $('fontPop').hidden = true; $('fontBtn').setAttribute('aria-expanded', 'false'); }
 
 function saveUserFonts() {
   const list = state.fonts.filter(f => f && f.user).map(({ name, family, css, file }) => ({ name, family, css, file }));
@@ -129,6 +171,7 @@ function removeCurrentFont() {
   $('font').querySelector(`option[value="${i}"]`).remove();
   $('font').value = $('font').options[0].value;
   saveUserFonts();
+  renderFontList();
   schedule();
 }
 
@@ -1423,7 +1466,9 @@ function syncControls() {
   const count = editor.textContent.replace(/\s+/g, '').length;
   $('charCount').value = count ? `${count.toLocaleString()}자` : '';
   editor.style.fontFamily = `"${currentFamily()}", "Malgun Gothic", sans-serif`;
-  $('removeFont').hidden = !state.fonts[+$('font').value].user;
+  $('fontBtn').style.fontFamily = `"${currentFamily()}", "Malgun Gothic", sans-serif`;
+  $('fontBtn').title = `글꼴: ${$('font').selectedOptions[0]?.textContent || ''}`;
+  $('fontBtn').setAttribute('aria-label', $('fontBtn').title);
   $('quantWrap').hidden = colorMode === 'duo';
   $('monoWrap').hidden = colorMode !== 'mono';
   $('toneWrap').hidden = colorMode === 'duo';
@@ -1508,7 +1553,22 @@ for (const id of ['pick', 'pick2']) $(id).onclick = () => $('file').click();
 $('file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
 $('save').onclick = save;
 $('fontForm').onsubmit = e => { e.preventDefault(); if ($('fontUrl').value.trim()) addFontFromUrl($('fontUrl').value); };
-$('removeFont').onclick = removeCurrentFont;
+// 글꼴 팝오버: Aa 버튼으로 열고, 바깥을 누르거나 Esc로 닫는다
+$('fontBtn').addEventListener('mousedown', e => e.preventDefault());   // 편집기 선택이 풀리지 않게
+$('fontBtn').onclick = e => { e.stopPropagation(); if ($('fontPop').hidden) openFontPop(); else closeFontPop(); };
+$('fontPop').addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', closeFontPop);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('fontPop').hidden) closeFontPop(); });
+
+// 글 크게 보기: 같은 편집기(서식 도구 포함)를 큰 창으로 옮겼다가 닫으면 제자리로
+const editorHome = $('editorBox').parentNode, editorNext = $('editorBox').nextSibling;
+$('expandEditor').onclick = () => {
+  $('editorSlot').append($('editorBox'));
+  $('editorDialog').showModal();
+  editor.focus();
+};
+$('closeEditor').onclick = () => $('editorDialog').close();
+$('editorDialog').addEventListener('close', () => { editorHome.insertBefore($('editorBox'), editorNext); closeFontPop(); });
 
 // 포토 모자이크 타일
 $('pickTiles').onclick = () => $('tileFile').click();
