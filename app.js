@@ -440,6 +440,7 @@ function wandRegion(seed, tol) {
 function setWand(on) {
   state.wand = on;
   $('wandBtn').setAttribute('aria-pressed', String(on));
+  $('wandTolWrap').hidden = !on;          // 허용 범위는 마법봉을 켰을 때만
   $('preview').classList.toggle('wand', on);
   schedule();
 }

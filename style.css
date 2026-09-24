@@ -351,6 +351,8 @@ dialog form { display: flex; flex-direction: column; gap: 8px; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 4px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .tab-panel:not([hidden]) { animation: fade .15s ease-out; }
+@keyframes reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.reveal:not([hidden]) { animation: reveal .18s ease-out; }
 .sec-head .reset:not([hidden]) { animation: fade .15s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

@@ -131,8 +131,10 @@
               <span class="tip" id="wandTip" role="tooltip">미리보기에서 빼거나 다시 넣을 곳을 누르세요. 비슷한 색으로 이어진 영역이 함께 바뀝니다.</span>
             </span>
           </div>
-          <div class="head"><span class="label">마법봉 허용 범위</span><span class="num-wrap"><input type="number" class="num" data-for="wandTol" aria-label="마법봉 허용 범위"></span></div>
-          <input type="range" id="wandTol" min="1" max="150" step="1" value="32">
+          <div class="field reveal" id="wandTolWrap" hidden>
+            <div class="head"><span class="label">마법봉 허용 범위</span><span class="num-wrap"><input type="number" class="num" data-for="wandTol" aria-label="마법봉 허용 범위"></span></div>
+            <input type="range" id="wandTol" min="1" max="150" step="1" value="32">
+          </div>
         </div>
       </section>
 
@@ -153,25 +155,21 @@
       </section>
 
       <section class="text-only">
-        <h2>크기</h2>
+        <h2>글자</h2>
         <label class="check"><input type="checkbox" id="autoFit" checked>글 길이에 맞춰 그림 꽉 채우기</label>
         <div class="field">
           <div class="head"><span class="label">기본 글자 크기</span><span class="num-wrap"><input type="number" class="num" data-for="fs" aria-label="기본 글자 크기"></span></div>
           <input type="range" id="fs" min="3" max="200" step="1" value="24" disabled>
+        </div>
+        <div class="field">
+          <div class="head"><span class="label">줄 간격</span><span class="num-wrap"><input type="number" class="num" data-for="lh" aria-label="줄 간격"></span></div>
+          <input type="range" id="lh" min="0.8" max="2" step="0.05" value="1.1">
         </div>
         <label class="check" id="repeatWrap"><input type="checkbox" id="repeat" checked>글이 모자라면 반복</label>
         <label class="check"><input type="checkbox" id="shrink">가장자리는 글자를 줄여서 채우기</label>
         <div class="field">
           <div class="head"><span class="label">획 두께</span><span class="num-wrap"><input type="number" class="num" data-for="stroke" aria-label="획 두께"><span class="unit">%</span></span></div>
           <input type="range" id="stroke" min="0" max="12" step="1" value="0">
-        </div>
-      </section>
-
-      <section class="text-only">
-        <h2>줄</h2>
-        <div class="field">
-          <div class="head"><span class="label">줄 간격</span><span class="num-wrap"><input type="number" class="num" data-for="lh" aria-label="줄 간격"></span></div>
-          <input type="range" id="lh" min="0.8" max="2" step="0.05" value="1.1">
         </div>
       </section>
     </div>
