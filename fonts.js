@@ -24,4 +24,10 @@ window.FONT_LIST = [
     family: 'Noto Serif KR',
     css: 'https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&display=swap',
   },
+  {
+    // 픽셀 글꼴 (SIL OFL 1.1). 12px이나 그 배수 크기에서 가장 또렷하다. 글꼴 파일이 커서(굵기마다 약 1.3MB) 고를 때 처음 한 번 받는다.
+    name: '모나',
+    family: 'Mona12',
+    css: 'https://cdn.jsdelivr.net/gh/MonadABXY/mona-font@2026.08.16/web/mona.css',
+  },
 ];
