@@ -204,8 +204,8 @@ input[type=range]:disabled { opacity: 0.3; cursor: default; }
   transition: opacity .15s, transform .1s;
 }
 .btn:active { transform: scale(0.98); }
-.btn.line { background: transparent; color: var(--ink); }
-.btn.line:hover { background: var(--hover); }
+.btn.line { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.line:hover { background: var(--hover); border-color: var(--muted); }
 .btn.small { height: 34px; padding: 0 14px; }
 .btn:disabled { opacity: 0.3; cursor: default; transform: none; }
 
