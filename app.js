@@ -1615,6 +1615,21 @@ $('whiteInner').addEventListener('change', () => { rebuildMask(false); schedule(
 
 // 마법봉: 모양 안을 누르면 빼고, 빠진 곳을 누르면 다시 넣는다
 $('wandBtn').onclick = () => setWand(!state.wand);
+// 말풍선은 아래로 여는 게 기본. 아래(스크롤 영역 끝까지) 자리가 모자라고 위에 자리가 있을 때만 위로
+function placeTip(btn) {
+  const tip = btn.nextElementSibling;
+  if (!tip || !tip.classList.contains('tip')) return;
+  const r = btn.getBoundingClientRect(), h = tip.offsetHeight + 10;
+  const box = btn.closest('.panel-body');
+  const top = box ? box.getBoundingClientRect().top : 0;
+  const bottom = box ? box.getBoundingClientRect().bottom : innerHeight;
+  const fitsBelow = r.bottom + h <= bottom, fitsAbove = r.top - h >= top;
+  tip.classList.toggle('below', fitsBelow || !fitsAbove);
+}
+document.querySelectorAll('.help').forEach(b => {
+  for (const ev of ['mouseenter', 'focus', 'pointerdown']) b.addEventListener(ev, () => placeTip(b));
+});
+
 // ? 도움말: 마우스를 올리면 보이고, 누르면 열어 둔다(터치용). 바깥을 누르면 닫는다
 document.querySelectorAll('.help').forEach(b => b.addEventListener('click', e => {
   e.stopPropagation();
