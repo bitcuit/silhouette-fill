@@ -125,8 +125,8 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
   position: absolute; right: -4px; bottom: calc(100% + 8px); z-index: 5; width: 220px;
   padding: 10px 12px; border-radius: 10px; color: var(--ink);
   /* 뒤가 흐리게 비치는 반투명 판 */
-  background: color-mix(in srgb, var(--panel) 55%, transparent); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4);
+  background: color-mix(in srgb, var(--ink) 5%, color-mix(in srgb, var(--panel) 40%, transparent)); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  -webkit-backdrop-filter: blur(6px) saturate(1.3); backdrop-filter: blur(6px) saturate(1.3);
   font-size: 12px; line-height: 1.55; word-break: keep-all; box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.28);
   opacity: 0; visibility: hidden; transform: translateY(2px); transition: opacity .12s, transform .12s, visibility .12s;
 }

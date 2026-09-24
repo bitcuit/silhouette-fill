@@ -10,3 +10,6 @@ desktop.ini
 # 기타
 node_modules/
 *.log
+
+# 소개 배너 (저장소에 올리지 않음)
+banner*.png
