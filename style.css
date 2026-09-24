@@ -160,7 +160,9 @@ output { font-variant-numeric: tabular-nums; color: var(--ink); }
 .dropzone p { margin: 0; }
 .dropzone .btn { padding: 0 16px; }
 #tileSection.dragging .dropzone { border-color: var(--ink); background: var(--hover); color: var(--ink); }
-.swatch-field { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.swatch-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+/* 투톤: 어두운 곳·밝은 곳을 한 줄에 */
+.swatch-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .swatch-field input[type=color] { width: 44px; height: 28px; flex: none; }
 .head.sub output { color: var(--muted); }
 

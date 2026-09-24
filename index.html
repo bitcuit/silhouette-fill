@@ -185,10 +185,12 @@
           <label><input type="radio" name="colorMode" value="mono">원톤<span class="sw" id="swMono"></span></label>
           <label><input type="radio" name="colorMode" value="duo">투톤<span class="sw" id="swDuo"></span></label>
         </div>
-        <label class="swatch-field" id="monoWrap" hidden><input type="color" id="monoColor" value="#2b59c3">기준 색</label>
+        <label class="swatch-field" id="monoWrap" hidden><span class="label">기준 색</span><input type="color" id="monoColor" value="#2b59c3"></label>
         <div id="duoWrap" class="duo" hidden>
-          <label class="swatch-field"><input type="color" id="duoDark" value="#000000">어두운 곳</label>
-          <label class="swatch-field"><input type="color" id="duoLight" value="#ffffff">밝은 곳</label>
+          <div class="swatch-row">
+            <label class="swatch-field"><span class="label">어두운 곳</span><input type="color" id="duoDark" value="#000000"></label>
+            <label class="swatch-field"><span class="label">밝은 곳</span><input type="color" id="duoLight" value="#ffffff"></label>
+          </div>
           <div class="field">
             <div class="head"><span class="label">나누는 밝기</span><span class="num-wrap"><input type="number" class="num" data-for="duoThr" aria-label="나누는 밝기"></span></div>
             <input type="range" id="duoThr" min="1" max="255" step="1" value="128">
