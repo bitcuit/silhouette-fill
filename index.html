@@ -165,10 +165,10 @@
     <div class="tab-panel" data-panel="color" role="tabpanel" hidden>
       <section>
         <h2>채움</h2>
-        <div class="seg">
-          <label><input type="radio" name="colorMode" value="image" checked>그림 색</label>
-          <label><input type="radio" name="colorMode" value="mono">한 색</label>
-          <label><input type="radio" name="colorMode" value="duo">두 색</label>
+        <div class="seg swatches">
+          <label><input type="radio" name="colorMode" value="image" checked>그림 색<span class="sw" id="swImage"></span></label>
+          <label><input type="radio" name="colorMode" value="mono">한 색<span class="sw" id="swMono"></span></label>
+          <label><input type="radio" name="colorMode" value="duo">두 색<span class="sw" id="swDuo"></span></label>
         </div>
         <label class="swatch-field" id="monoWrap" hidden><input type="color" id="monoColor" value="#2b59c3">기준 색</label>
         <div id="duoWrap" class="duo" hidden>
@@ -248,14 +248,13 @@
     </div>
     <canvas id="preview" hidden></canvas>
   </div>
-  <div class="bar">
-    <div id="status" role="status"></div>
-    <div class="zoom" id="zoomBar" hidden>
-      <label class="check"><input type="checkbox" id="whiteView" checked>투명 부분 흰색으로 보기</label>
-      <button class="tool text" id="zoomFit" aria-pressed="true">맞춤</button>
-      <input type="range" id="zoom" min="5" max="400" step="1" value="100" aria-label="확대/축소">
-      <span class="num-wrap"><input type="number" class="num" data-for="zoom" aria-label="확대/축소"><span class="unit">%</span></span>
-    </div>
+  <div id="status" role="status"></div>
+  <div class="floatbar" id="zoomBar" hidden>
+    <label class="check"><input type="checkbox" id="whiteView" checked>투명 부분 흰색으로 보기</label>
+    <span class="divider" aria-hidden="true"></span>
+    <button class="tool text" id="zoomFit" aria-pressed="true">맞춤</button>
+    <input type="range" id="zoom" min="5" max="400" step="1" value="100" aria-label="확대/축소">
+    <span class="num-wrap"><input type="number" class="num" data-for="zoom" aria-label="확대/축소"><span class="unit">%</span></span>
   </div>
 </main>
 

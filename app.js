@@ -187,6 +187,10 @@ async function loadFile(file) {
   state.edits = [];
   syncWandButtons();
   rebuildMask(true);
+  // '그림 색' 버튼에 보일 견본: 모양 안 대표색 5개를 밝기순으로
+  const pal = getPalette(5, +$('thr').value) || [];
+  state.swatch = pal.slice().sort((a, b) => (a[0] * 0.299 + a[1] * 0.587 + a[2] * 0.114) - (b[0] * 0.299 + b[1] * 0.587 + b[2] * 0.114));
+  state.paletteKey = '';
 
   // 저장 형식은 투명을 담을 수 있는 PNG가 기본 (흰색 제외로 바탕을 뺀 그림도 투명하게 저장되도록).
   // 저장 크기에는 실제 픽셀 수를 적는다
@@ -297,9 +301,11 @@ function jpegWithDpi(buf, dpi) {
 
 // ---------- 미리보기 확대/축소 ----------
 function fitZoom() {
-  const st = $('stage');
-  const pad = 64;
-  const z = Math.min((st.clientWidth - pad) / state.img.width, (st.clientHeight - pad) / state.img.height);
+  // 작업대 안쪽 여백(위아래 도구 막대·안내 칩 자리 포함)을 뺀 공간에 맞춘다
+  const st = $('stage'), cs = getComputedStyle(st);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  const z = Math.min((st.clientWidth - padX) / state.img.width, (st.clientHeight - padY) / state.img.height);
   return Math.min(4, Math.max(0.05, z));
 }
 const currentZoom = () => state.zoom ?? fitZoom();
@@ -1315,6 +1321,7 @@ function previewSize(scale) {
 }
 
 let renderToken = 0;
+let lastPaintAt = 0;
 async function render() {
   syncControls();
   if (!state.img) return;
@@ -1328,6 +1335,11 @@ async function render() {
   // 마법봉을 쓰는 동안은 어디를 누르는지 보이게 원본을 옅게 깐다 (미리보기만, 저장에는 안 들어감)
   if (state.wand) o.ghost = Math.max(o.ghost, 0.3);
   const res = paint($('preview'), pw, ph, o, src, base);
+  const now = performance.now();
+  if (now - lastPaintAt > 400 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    $('preview').animate([{ opacity: 0.55 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+  }
+  lastPaintAt = now;
 
   if (o.kind === 'image') {
     if (res.noTiles) setStatus('타일로 쓸 이미지를 추가하세요.');
@@ -1378,7 +1390,15 @@ function bindNumbers() {
   });
 }
 
+// 슬라이더의 채워진 구간(강조색) 길이
+function fillRange(el) {
+  const min = +el.min || 0, max = +el.max || 100;
+  el.style.setProperty('--p', `${((+el.value - min) / (max - min || 1)) * 100}%`);
+}
+document.addEventListener('input', e => { if (e.target.type === 'range') fillRange(e.target); }, true);
+
 function syncNumbers() {
+  document.querySelectorAll('input[type=range]').forEach(fillRange);
   document.querySelectorAll('.num').forEach(num => {
     const range = $(num.dataset.for);
     num.min = range.min; num.max = range.max; num.step = range.step;
@@ -1408,6 +1428,12 @@ function syncControls() {
   $('quantWrap').hidden = colorMode === 'duo';
   $('monoWrap').hidden = colorMode !== 'mono';
   $('toneWrap').hidden = colorMode === 'duo';
+  // 색 모드 버튼 안의 결과 색 견본
+  const sw = state.swatch && state.swatch.length ? state.swatch : [[255, 107, 107], [255, 209, 102], [6, 214, 160], [17, 138, 178]];
+  $('swImage').style.background = `linear-gradient(90deg, ${sw.map((c, i) => `${cssRgb(c)} ${i / sw.length * 100}% ${(i + 1) / sw.length * 100}%`).join(', ')})`;
+  const [mh2, ms2] = hexToHsl($('monoColor').value);
+  $('swMono').style.background = `linear-gradient(90deg, hsl(${mh2},${ms2}%,18%), hsl(${mh2},${ms2}%,90%))`;
+  $('swDuo').style.background = `linear-gradient(90deg, ${$('duoDark').value} 50%, ${$('duoLight').value} 50%)`;
   $('thrWrap').hidden = maskMode() === 'full';
   $('whiteInnerWrap').hidden = maskMode() !== 'white';
   syncResets();
