@@ -81,10 +81,13 @@ h1.brand .tip.below::after { left: 151px; }
 }
 .tabs button[aria-selected="true"]::after { transform: scaleX(1); }
 .panel-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 0 16px 0 24px; }
-.panel-foot { display: flex; flex-direction: column; gap: 10px; padding: 16px 24px 20px; border-top: 1px solid var(--line); }
+.panel-foot {
+  position: relative; z-index: 2; display: flex; flex-direction: column; gap: 10px; padding: 16px 24px 20px;
+  background: var(--panel); box-shadow: 0 -12px 24px -18px rgba(0, 0, 0, 0.35);   /* 선 대신 위로 옅은 그림자: 설정이 그 아래로 스크롤됨 */
+}
 
-section { display: flex; flex-direction: column; gap: 14px; padding: 22px 0; }
-section + section { border-top: 1px solid var(--line); }
+section { display: flex; flex-direction: column; gap: 14px; padding: 20px 0 12px; }
+section + section { padding-top: 22px; }   /* 구분선 없이 제목과 여백으로 나눔 */
 h2 { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; margin: 0; }
 
 .field { display: flex; flex-direction: column; gap: 8px; }
